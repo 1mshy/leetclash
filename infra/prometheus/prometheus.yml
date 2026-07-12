@@ -1,0 +1,19 @@
+# Minimal dev Prometheus config.
+# api/realtime run on the HOST in Phase 0 (pnpm dev); scraped via
+# host.docker.internal. These are placeholders until the services expose
+# /metrics.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: api
+    static_configs:
+      - targets: ["host.docker.internal:4000"]
+
+  - job_name: realtime
+    static_configs:
+      - targets: ["host.docker.internal:4001"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

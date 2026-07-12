@@ -1,2 +1,18 @@
 .tokensave
 .claude
+
+# deps / builds
+node_modules/
+.next/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# misc
+.DS_Store
+coverage/

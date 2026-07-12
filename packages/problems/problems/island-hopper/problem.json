@@ -1,0 +1,17 @@
+{
+  "slug": "island-hopper",
+  "title": "Island Hopper",
+  "difficulty": "easy",
+  "tags": ["bfs", "grid", "shortest-path"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    r, c = int(data[0]), int(data[1])\n    grid = data[2:2 + r]\n    # TODO: print the minimum number of hops from F to H, or -1\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <string>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int r, c;\n    cin >> r >> c;\n    vector<string> grid(r);\n    for (auto &row : grid) cin >> row;\n    // TODO: print the minimum number of hops from F to H, or -1\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

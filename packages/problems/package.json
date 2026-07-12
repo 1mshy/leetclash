@@ -1,0 +1,13 @@
+{
+  "name": "@leetclash/problems",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo skip",
+    "typecheck": "echo skip",
+    "validate": "node scripts/validate.mjs",
+    "test": "node scripts/validate.mjs",
+    "gen-outputs": "node scripts/gen-outputs.mjs"
+  }
+}

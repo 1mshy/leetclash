@@ -1,0 +1,180 @@
+# LeetClash — dev infrastructure (PLAN.md §7, dev table)
+#
+# Usage:  docker compose -f infra/docker-compose.yml up -d
+#
+# NOTE (Phase 0): the app services (web / api / realtime) are NOT containerized
+# yet — run them on the host with `pnpm dev`. They reach these services on
+# localhost via the published ports (see ../.env.example).
+
+name: leetclash
+
+networks:
+  default:
+    # web/api/realtime (host) + postgres/redis/minio + judge0-server (API only)
+  judge:
+    # Isolated network for the Judge0 quartet. Only judge0-server also joins
+    # `default` so the api can reach it on localhost:2358.
+
+volumes:
+  postgres-data:
+  minio-data:
+  judge0-db-data:
+
+services:
+  # ── Core app dependencies ────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: leetclash
+      POSTGRES_PASSWORD: leetclash
+      POSTGRES_DB: leetclash
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leetclash -d leetclash"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: leetclash
+      MINIO_ROOT_PASSWORD: leetclash-secret
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # web console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: create the buckets the app expects, then exit.
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 leetclash leetclash-secret &&
+        mc mb --ignore-existing local/testdata &&
+        mc mb --ignore-existing local/submissions &&
+        echo 'buckets ready'
+      "
+
+  # ── Judge0 quartet (MVP judge, PLAN.md §4.1) ─────────────────────────────
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    env_file: judge0.env
+    ports:
+      - "2358:2358"
+    networks:
+      - default # so the api (host) can reach it at localhost:2358
+      - judge
+    depends_on:
+      judge0-db:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:2358/system_info > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  judge0-worker:
+    image: judge0/judge0:1.13.1
+    command: ["./scripts/workers"]
+    env_file: judge0.env
+    privileged: true # required by Judge0's isolate sandbox
+    networks:
+      - judge
+    deploy:
+      replicas: 2
+    depends_on:
+      judge0-db:
+        condition: service_healthy
+      judge0-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  judge0-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0-dev-password
+      POSTGRES_DB: judge0
+    networks:
+      - judge
+    volumes:
+      - judge0-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U judge0 -d judge0"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  judge0-redis:
+    image: redis:7-alpine
+    networks:
+      - judge
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Optional: reverse proxy (profile "proxy") ────────────────────────────
+  traefik:
+    image: traefik:v3
+    profiles: ["proxy"]
+    ports:
+      - "80:80"
+      - "8080:8080" # dashboard (insecure, dev only)
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # ── Optional: observability (profile "observability") ───────────────────
+  prometheus:
+    image: prom/prometheus
+    profiles: ["observability"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # scrape api/realtime on the host
+
+  grafana:
+    image: grafana/grafana
+    profiles: ["observability"]
+    ports:
+      - "3001:3000" # 3000 is taken by the Next.js dev server on the host
+    environment:
+      GF_SECURITY_ADMIN_USER: leetclash
+      GF_SECURITY_ADMIN_PASSWORD: leetclash
+
+  loki:
+    image: grafana/loki
+    profiles: ["observability"]
+    ports:
+      - "3100:3100"

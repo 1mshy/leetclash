@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-surface: #0b0e14;
+  --color-panel: #11151f;
+  --color-edge: #1e2534;
+  --color-accent: #22d3ee;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: #d5dbe6;
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}

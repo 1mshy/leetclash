@@ -1,0 +1,15 @@
+# Minimal Traefik v3 static config — DEV ONLY (insecure dashboard, no TLS).
+entryPoints:
+  web:
+    address: ":80"
+
+api:
+  dashboard: true
+  insecure: true # dev only — never in prod
+
+providers:
+  docker:
+    exposedByDefault: false
+
+log:
+  level: INFO

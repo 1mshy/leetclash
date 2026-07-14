@@ -24,6 +24,7 @@ test_cases, matches, match_players, submissions, match_events.
 ```sh
 pnpm db:generate   # emit SQL migrations to ./drizzle
 pnpm db:migrate    # apply them
+pnpm db:seed       # upsert packages/problems into problems/test_cases (idempotent)
 ```
 
 ## Routes
@@ -32,9 +33,12 @@ pnpm db:migrate    # apply them
 - `GET /problems` — published problem summaries.
 - `GET /problems/:slug` — statement + starter code + **public sample tests
   only** (hidden tests never leave the server).
+- `POST /users/guest` — create an anonymous guest user (Phase 0 stand-in for
+  auth; the web caches the id in localStorage).
 - `POST /rooms` — create a private room (match in `matched` status, 6-char
-  invite code, Speed Race). Phase 1 skeleton.
-- `POST /rooms/:code/join` — join by invite code.
+  invite code, Speed Race). Phase 1 skeleton. Body/response DTOs live in
+  `@leetclash/shared` (`CreateRoomRequest` / `CreateRoomResponse`).
+- `POST /rooms/:code/join` — join by invite code (`JoinRoomRequest`).
 - `/api/auth/*` — better-auth (GitHub + Google OAuth). Skeleton: auth tables
   still need to be generated (`npx @better-auth/cli generate`).
 

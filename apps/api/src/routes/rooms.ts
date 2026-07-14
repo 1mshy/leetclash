@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { CreateRoomRequest, INVITE_CODE_LENGTH, JoinRoomRequest } from "@leetclash/shared";
 import { db } from "../db/client.js";
 import { matches, matchPlayers } from "../db/schema.js";
 
@@ -9,42 +10,32 @@ import { matches, matchPlayers } from "../db/schema.js";
  * Private rooms — Phase 1 skeleton (PLAN.md §9: invite code, Speed Race only).
  *
  * Auth is not wired through yet (see src/auth.ts TODO), so callers pass their
- * userId explicitly. TODO(phase1): derive userId from the better-auth session
- * and reject unauthenticated requests.
+ * userId explicitly (a guest id from POST /users/guest). TODO(phase1): derive
+ * userId from the better-auth session and reject unauthenticated requests.
  */
 
 // Unambiguous alphabet (no 0/O/1/I/L) for shout-across-the-room invite codes.
 const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-const CODE_LENGTH = 6;
 
 function generateInviteCode(): string {
   let code = "";
-  for (let i = 0; i < CODE_LENGTH; i++) {
+  for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
     code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
   }
   return code;
 }
 
-const CreateRoomBody = z.object({
-  hostId: z.string().uuid(),
-  timeLimitSec: z.number().int().positive().max(3600).default(1800),
-});
-
 const JoinRoomParams = z.object({
   code: z
     .string()
-    .length(CODE_LENGTH)
+    .length(INVITE_CODE_LENGTH)
     .transform((s) => s.toUpperCase()),
-});
-
-const JoinRoomBody = z.object({
-  userId: z.string().uuid(),
 });
 
 export const roomRoutes: FastifyPluginAsync = async (app) => {
   /** Create a private room: a match row in 'matched' with an invite code. */
   app.post("/rooms", async (request, reply) => {
-    const body = CreateRoomBody.safeParse(request.body);
+    const body = CreateRoomRequest.safeParse(request.body);
     if (!body.success) {
       return reply.status(400).send({ error: body.error.flatten().fieldErrors });
     }
@@ -87,7 +78,7 @@ export const roomRoutes: FastifyPluginAsync = async (app) => {
   /** Join a room by invite code. */
   app.post("/rooms/:code/join", async (request, reply) => {
     const params = JoinRoomParams.safeParse(request.params);
-    const body = JoinRoomBody.safeParse(request.body);
+    const body = JoinRoomRequest.safeParse(request.body);
     if (!params.success || !body.success) {
       return reply.status(400).send({ error: "invalid code or body" });
     }

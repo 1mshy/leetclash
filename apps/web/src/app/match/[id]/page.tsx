@@ -1,8 +1,9 @@
 "use client";
 
-import { use, useEffect } from "react";
+import { use, useEffect, useState } from "react";
 import CodeEditor from "@/components/CodeEditor";
 import OpponentProgress from "@/components/OpponentProgress";
+import { getStoredGuest } from "@/lib/api";
 import { joinMatch } from "@/lib/socket";
 import { useMatchStore } from "@/stores/match";
 
@@ -26,9 +27,16 @@ export default function MatchPage({
   const setMatch = useMatchStore((s) => s.setMatch);
   const applyMatchEvent = useMatchStore((s) => s.applyMatchEvent);
 
+  // Read via window instead of useSearchParams to avoid the Suspense
+  // requirement during prerender; the value is only known client-side anyway.
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
   useEffect(() => {
-    // TODO: pass the real user id from the auth session once auth exists.
-    setMatch(id, null);
+    setInviteCode(new URLSearchParams(window.location.search).get("invite"));
+  }, []);
+
+  useEffect(() => {
+    // Guest id until real auth sessions land (see lib/api.ts).
+    setMatch(id, getStoredGuest()?.id ?? null);
     const leave = joinMatch(id, applyMatchEvent);
     return leave;
   }, [id, setMatch, applyMatchEvent]);
@@ -50,6 +58,11 @@ export default function MatchPage({
         <span>
           match <span className="text-zinc-300">{id}</span>
         </span>
+        {inviteCode && (
+          <span>
+            invite <span className="text-accent">{inviteCode}</span>
+          </span>
+        )}
         <span>
           status <span className="text-accent">{status ?? "connecting…"}</span>
         </span>

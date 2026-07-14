@@ -6,6 +6,7 @@ import { closeDb } from "./db/client.js";
 import { healthRoutes } from "./routes/health.js";
 import { problemRoutes } from "./routes/problems.js";
 import { roomRoutes } from "./routes/rooms.js";
+import { userRoutes } from "./routes/users.js";
 
 const app = Fastify({ logger: true });
 
@@ -18,6 +19,7 @@ mountAuth(app);
 await app.register(healthRoutes);
 await app.register(problemRoutes);
 await app.register(roomRoutes);
+await app.register(userRoutes);
 
 // Graceful shutdown: stop accepting connections, then close the DB pool.
 let shuttingDown = false;

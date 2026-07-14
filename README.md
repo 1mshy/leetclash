@@ -25,8 +25,9 @@ cp .env.example .env
 # infra: postgres, redis, minio, judge0
 docker compose -f infra/docker-compose.yml up -d
 
-# db migrations
+# db migrations + seed the problem bank
 pnpm --filter @leetclash/api db:migrate
+pnpm --filter @leetclash/api db:seed
 
 # run everything (web :3000, api :4000, realtime :4001)
 pnpm dev

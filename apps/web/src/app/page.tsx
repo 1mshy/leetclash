@@ -16,7 +16,8 @@ export default function LobbyPage() {
     const res = await createRoom();
     setBusy(false);
     if (res.ok) {
-      router.push(`/match/${res.data.matchId}`);
+      // Carry the invite code so the match page can show it to the host.
+      router.push(`/match/${res.data.matchId}?invite=${res.data.inviteCode}`);
     } else {
       setError(res.error);
     }

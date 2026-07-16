@@ -134,10 +134,12 @@ services:
 
   judge0-redis:
     image: redis:7-alpine
+    # Password must match REDIS_PASSWORD in judge0.env (Judge0 always AUTHs).
+    command: ["redis-server", "--requirepass", "judge0-dev-password"]
     networks:
       - judge
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "judge0-dev-password", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10

@@ -1,29 +1,19 @@
-import { randomInt } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { CreateRoomRequest, INVITE_CODE_LENGTH, JoinRoomRequest } from "@leetclash/shared";
 import { db } from "../db/client.js";
 import { matches, matchPlayers } from "../db/schema.js";
+import { enqueueMatchStart } from "../match/engine.js";
+import { generateInviteCode } from "../match/invite.js";
 
 /**
- * Private rooms — Phase 1 skeleton (PLAN.md §9: invite code, Speed Race only).
+ * Private rooms — Phase 1 (PLAN.md §9: invite code, Speed Race only).
  *
  * Auth is not wired through yet (see src/auth.ts TODO), so callers pass their
- * userId explicitly (a guest id from POST /users/guest). TODO(phase1): derive
+ * userId explicitly (a guest id from POST /users/guest). TODO(phase2): derive
  * userId from the better-auth session and reject unauthenticated requests.
  */
-
-// Unambiguous alphabet (no 0/O/1/I/L) for shout-across-the-room invite codes.
-const CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-
-function generateInviteCode(): string {
-  let code = "";
-  for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
-    code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
-  }
-  return code;
-}
 
 const JoinRoomParams = z.object({
   code: z
@@ -115,9 +105,9 @@ export const roomRoutes: FastifyPluginAsync = async (app) => {
       userId: body.data.userId,
     });
 
-    // TODO(phase1): notify the realtime service (Redis pub/sub) so it starts
-    // the countdown state machine and appends match_created / countdown_started
-    // rows to match_events. This route only persists the join.
+    // Room is full — hand off to the match state machine (countdown → reveal
+    // → live → finished), which runs as durable jobs in the worker process.
+    await enqueueMatchStart(match.id);
 
     return reply.status(200).send({ matchId: match.id });
   });

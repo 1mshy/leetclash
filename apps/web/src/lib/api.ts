@@ -5,8 +5,13 @@
  */
 import type {
   CreateRoomResponse,
+  CreateSubmissionResponse,
   GuestUser,
   JoinRoomResponse,
+  Language,
+  MatchDetail,
+  RematchResponse,
+  SubmissionResult,
 } from "@leetclash/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
@@ -57,7 +62,11 @@ async function ensureGuest(): Promise<ApiResult<GuestUser>> {
   const existing = getStoredGuest();
   if (existing) return { ok: true, data: existing };
 
-  const res = await apiFetch<GuestUser>("/users/guest", { method: "POST" });
+  // Fastify rejects an empty body when content-type is application/json.
+  const res = await apiFetch<GuestUser>("/users/guest", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
   if (res.ok) {
     window.localStorage.setItem(GUEST_KEY, JSON.stringify(res.data));
   }
@@ -86,4 +95,58 @@ export async function joinRoom(
     method: "POST",
     body: JSON.stringify({ userId: guest.data.id }),
   });
+}
+
+// ─── Match + submission endpoints (Phase 1) ──────────────────────────────────
+
+export async function getMatch(matchId: string): Promise<ApiResult<MatchDetail>> {
+  return apiFetch<MatchDetail>(`/matches/${encodeURIComponent(matchId)}`);
+}
+
+export async function requestRematch(
+  matchId: string,
+): Promise<ApiResult<RematchResponse>> {
+  const guest = await ensureGuest();
+  if (!guest.ok) return guest;
+  return apiFetch<RematchResponse>(`/matches/${encodeURIComponent(matchId)}/rematch`, {
+    method: "POST",
+    body: JSON.stringify({ userId: guest.data.id }),
+  });
+}
+
+export async function createSubmission(params: {
+  matchId: string;
+  language: Language;
+  source: string;
+  kind: "run" | "submit";
+}): Promise<ApiResult<CreateSubmissionResponse>> {
+  const guest = await ensureGuest();
+  if (!guest.ok) return guest;
+  return apiFetch<CreateSubmissionResponse>("/submissions", {
+    method: "POST",
+    body: JSON.stringify({ ...params, userId: guest.data.id }),
+  });
+}
+
+export async function getSubmission(
+  submissionId: string,
+): Promise<ApiResult<SubmissionResult>> {
+  return apiFetch<SubmissionResult>(
+    `/submissions/${encodeURIComponent(submissionId)}`,
+  );
+}
+
+/** Poll a submission until judging finishes (or the deadline passes). */
+export async function pollSubmission(
+  submissionId: string,
+  { intervalMs = 750, timeoutMs = 90_000 } = {},
+): Promise<ApiResult<SubmissionResult>> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await getSubmission(submissionId);
+    if (!res.ok) return res;
+    if (res.data.status === "done") return res;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return { ok: false, error: "judging timed out — try again" };
 }

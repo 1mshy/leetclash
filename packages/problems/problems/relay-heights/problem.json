@@ -1,0 +1,17 @@
+{
+  "slug": "relay-heights",
+  "title": "Signal Ladder",
+  "difficulty": "hard",
+  "tags": ["dp", "binary-search"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    n = int(data[0])\n    h = [int(x) for x in data[1:1 + n]]\n    # TODO: print the maximum number of towers a signal chain can use\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    long long n;\n    cin >> n;\n    vector<long long> h(n);\n    for (auto &x : h) cin >> x;\n    // TODO: print the maximum number of towers a signal chain can use\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

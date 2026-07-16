@@ -84,6 +84,16 @@ export const MatchFinishedEvent = z.object({
   }),
 });
 
+/** A player started a rematch; both clients navigate to the new match. */
+export const RematchEvent = z.object({
+  ...base,
+  type: z.literal("rematch"),
+  payload: z.object({
+    newMatchId: z.string().uuid(),
+    byUserId: z.string().uuid(),
+  }),
+});
+
 export const MatchEvent = z.discriminatedUnion("type", [
   MatchCreatedEvent,
   CountdownStartedEvent,
@@ -94,6 +104,7 @@ export const MatchEvent = z.discriminatedUnion("type", [
   PlayerDisconnectedEvent,
   PlayerReconnectedEvent,
   MatchFinishedEvent,
+  RematchEvent,
 ]);
 export type MatchEvent = z.infer<typeof MatchEvent>;
 

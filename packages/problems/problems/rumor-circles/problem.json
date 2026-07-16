@@ -1,0 +1,17 @@
+{
+  "slug": "rumor-circles",
+  "title": "Dockside Whispers",
+  "difficulty": "medium",
+  "tags": ["graph", "dfs", "union-find"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    n, m = int(data[0]), int(data[1])\n    edges = []\n    idx = 2\n    for _ in range(m):\n        u, v = int(data[idx]), int(data[idx + 1])\n        idx += 2\n        edges.append((u, v))\n    # TODO: print the number of friendship circles (connected components)\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int n, m;\n    cin >> n >> m;\n    vector<pair<int, int>> edges(m);\n    for (auto &[u, v] : edges) cin >> u >> v;\n    // TODO: print the number of friendship circles (connected components)\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

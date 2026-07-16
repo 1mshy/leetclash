@@ -70,6 +70,8 @@ export const submissionStatusEnum = pgEnum("submission_status", [
   "done",
 ]);
 
+export const submissionKindEnum = pgEnum("submission_kind", ["run", "submit"]);
+
 export const problemStatusEnum = pgEnum("problem_status", [
   "draft",
   "published",
@@ -243,10 +245,17 @@ export const submissions = pgTable(
     sourceInline: text("source_inline"),
     /** Raw UTF-8 byte length of the source (Code Golf metric, computed API-side). */
     bytes: integer("bytes").notNull(),
+    /** Run = public samples, fast feedback; Submit = hidden suite, counts. */
+    kind: submissionKindEnum("kind").notNull().default("submit"),
     status: submissionStatusEnum("status").notNull().default("pending"),
     verdict: verdictEnum("verdict"),
     timeMs: integer("time_ms"),
     memoryKb: integer("memory_kb"),
+    /** Tests passed before the first failure / total tests run. */
+    testsPassed: integer("tests_passed"),
+    testsTotal: integer("tests_total"),
+    /** Compile/runtime error detail, truncated server-side. */
+    detail: text("detail"),
     /** Highest Scaling Duel tier passed. */
     tierReached: integer("tier_reached"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

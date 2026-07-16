@@ -1,5 +1,12 @@
 import { z } from "zod";
 
+// ─── Match constants (server-authoritative; clients render, never decide) ────
+
+/** Seconds between "matched" and problem reveal (§1.1 step 2). */
+export const COUNTDOWN_SECONDS = 5;
+/** Minimum seconds between two Submits per player per match (§1.2). */
+export const SUBMIT_THROTTLE_SEC = 10;
+
 // ─── Modes & languages ────────────────────────────────────────────────────────
 
 export const GameMode = z.enum([

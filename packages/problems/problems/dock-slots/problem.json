@@ -1,0 +1,17 @@
+{
+  "slug": "dock-slots",
+  "title": "Dock Master",
+  "difficulty": "medium",
+  "tags": ["greedy", "intervals", "sorting"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    n = int(data[0])\n    bookings = []\n    for i in range(n):\n        s, e = int(data[1 + 2 * i]), int(data[2 + 2 * i])\n        bookings.append((s, e))\n    # TODO: print the maximum number of bookings the dock can serve\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    long long n;\n    cin >> n;\n    vector<pair<long long, long long>> bookings(n);\n    for (auto &b : bookings) cin >> b.first >> b.second;\n    // TODO: print the maximum number of bookings the dock can serve\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

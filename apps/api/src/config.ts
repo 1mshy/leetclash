@@ -11,6 +11,14 @@ const EnvSchema = z.object({
     .default("postgres://leetclash:leetclash@localhost:5432/leetclash"),
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
   JUDGE0_URL: z.string().min(1).default("http://localhost:2358"),
+  /**
+   * Minimum memory_limit (KB) sent to Judge0. Dev-only escape hatch: on Apple
+   * Silicon the amd64 Judge0 image runs under Rosetta, whose translation layer
+   * needs far more address space than the per-problem limits allow — anything
+   * under ~512 MB dies with "rosetta error: mmap failed". 0 = respect problem
+   * limits exactly (production).
+   */
+  JUDGE0_MEMORY_FLOOR_KB: z.coerce.number().int().nonnegative().default(0),
   API_PORT: z.coerce.number().int().positive().default(4000),
   AUTH_SECRET: z.string().min(1).default("dev-only-secret-change-me"),
   WEB_URL: z.string().min(1).default("http://localhost:3000"),

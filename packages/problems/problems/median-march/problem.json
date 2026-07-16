@@ -1,0 +1,17 @@
+{
+  "slug": "median-march",
+  "title": "Caravan Rally",
+  "difficulty": "easy",
+  "tags": ["sorting", "math", "greedy"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    n = int(data[0])\n    a = [int(x) for x in data[1:1 + n]]\n    # TODO: print the minimum total miles to gather all caravans at one marker\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    long long n;\n    cin >> n;\n    vector<long long> a(n);\n    for (auto &x : a) cin >> x;\n    // TODO: print the minimum total miles to gather all caravans at one marker\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

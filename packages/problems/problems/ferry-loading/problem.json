@@ -1,0 +1,17 @@
+{
+  "slug": "ferry-loading",
+  "title": "River Ferry",
+  "difficulty": "medium",
+  "tags": ["two-pointers", "greedy", "sorting"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    n, w = int(data[0]), int(data[1])\n    crates = [int(x) for x in data[2:2 + n]]\n    # TODO: print the minimum number of crossings needed to move every crate\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    long long n, w;\n    cin >> n >> w;\n    vector<long long> crates(n);\n    for (auto &x : crates) cin >> x;\n    // TODO: print the minimum number of crossings needed to move every crate\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

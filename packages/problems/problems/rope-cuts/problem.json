@@ -1,0 +1,17 @@
+{
+  "slug": "rope-cuts",
+  "title": "Rig Loft",
+  "difficulty": "medium",
+  "tags": ["binary-search", "greedy"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    n, k = int(data[0]), int(data[1])\n    lens = [int(x) for x in data[2:2 + n]]\n    # TODO: print the largest L >= 1 with sum(len_i // L) >= k, or 0 if none\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    long long n, k;\n    cin >> n >> k;\n    vector<long long> lens(n);\n    for (auto &x : lens) cin >> x;\n    // TODO: print the largest L >= 1 with sum(len_i / L) >= k, or 0 if none\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

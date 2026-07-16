@@ -1,0 +1,17 @@
+{
+  "slug": "token-fare",
+  "title": "Token Fare",
+  "difficulty": "medium",
+  "tags": ["dp", "greedy"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    k, f = int(data[0]), int(data[1])\n    d = [int(x) for x in data[2:2 + k]]\n    # TODO: print the minimum number of tokens that pay exactly f, or -1\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    long long k, f;\n    cin >> k >> f;\n    vector<long long> d(k);\n    for (auto &x : d) cin >> x;\n    // TODO: print the minimum number of tokens that pay exactly f, or -1\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

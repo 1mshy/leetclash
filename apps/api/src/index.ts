@@ -4,8 +4,10 @@ import { mountAuth } from "./auth.js";
 import { config } from "./config.js";
 import { closeDb } from "./db/client.js";
 import { healthRoutes } from "./routes/health.js";
+import { matchRoutes } from "./routes/matches.js";
 import { problemRoutes } from "./routes/problems.js";
 import { roomRoutes } from "./routes/rooms.js";
+import { submissionRoutes } from "./routes/submissions.js";
 import { userRoutes } from "./routes/users.js";
 
 const app = Fastify({ logger: true });
@@ -17,8 +19,10 @@ await app.register(cors, {
 
 mountAuth(app);
 await app.register(healthRoutes);
+await app.register(matchRoutes);
 await app.register(problemRoutes);
 await app.register(roomRoutes);
+await app.register(submissionRoutes);
 await app.register(userRoutes);
 
 // Graceful shutdown: stop accepting connections, then close the DB pool.

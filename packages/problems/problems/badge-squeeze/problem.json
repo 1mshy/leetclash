@@ -1,0 +1,17 @@
+{
+  "slug": "badge-squeeze",
+  "title": "Badge Squeeze",
+  "difficulty": "easy",
+  "tags": ["strings", "simulation"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    s = sys.stdin.readline().strip()\n    # TODO: print the run-length compressed form if strictly shorter, else s\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <string>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    string s;\n    cin >> s;\n    // TODO: print the run-length compressed form if strictly shorter, else s\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

@@ -8,6 +8,13 @@
       "when": 1783890580492,
       "tag": "0000_amazing_black_tom",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784167932292,
+      "tag": "0001_stiff_red_skull",
+      "breakpoints": true
     }
   ]
 }

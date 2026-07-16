@@ -119,7 +119,9 @@ export async function judgeWithJudge0(params: JudgeParams): Promise<JudgeOutcome
         stdin: b64(params.stdin),
         expected_output: b64(params.expectedOutput),
         cpu_time_limit: params.timeLimitMs ? params.timeLimitMs / 1000 : undefined,
-        memory_limit: params.memoryLimitKb,
+        memory_limit: params.memoryLimitKb
+          ? Math.max(params.memoryLimitKb, config.JUDGE0_MEMORY_FLOOR_KB)
+          : undefined,
       }),
     },
   );

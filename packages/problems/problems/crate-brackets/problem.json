@@ -1,0 +1,17 @@
+{
+  "slug": "crate-brackets",
+  "title": "Crate Manifest",
+  "difficulty": "easy",
+  "tags": ["stack", "strings"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": {
+      "python": { "timeLimitMs": 5000 }
+    }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    n = int(data[0])\n    s = data[1] if len(data) > 1 else \"\"\n    # TODO: print \"YES\" if s is a balanced bracket sequence, else \"NO\"\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <string>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    int n;\n    string s;\n    cin >> n >> s;\n    // TODO: print \"YES\" if s is a balanced bracket sequence, else \"NO\"\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

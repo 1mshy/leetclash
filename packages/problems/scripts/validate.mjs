@@ -2,6 +2,10 @@
 /**
  * Problem bank validator (dependency-free).
  *
+ * Usage:
+ *   node scripts/validate.mjs            # all problems
+ *   node scripts/validate.mjs <slug>...  # only the given problems
+ *
  * For every directory under problems/:
  *   1. Parse and sanity-check problem.json against the ProblemManifest shape.
  *   2. Check that statement.md, solutions, generator.py and tests exist.
@@ -251,10 +255,20 @@ function checkGenerator(slug, dir) {
 
 // ---------- main ----------
 
-const slugs = readdirSync(PROBLEMS_DIR).filter((d) => statSync(path.join(PROBLEMS_DIR, d)).isDirectory()).sort();
+const requested = process.argv.slice(2);
+const slugs = (requested.length > 0
+  ? requested
+  : readdirSync(PROBLEMS_DIR).filter((d) => statSync(path.join(PROBLEMS_DIR, d)).isDirectory())
+).sort();
 if (slugs.length === 0) {
   console.error("No problem directories found under problems/");
   process.exit(1);
+}
+for (const slug of slugs) {
+  if (!existsSync(path.join(PROBLEMS_DIR, slug))) {
+    console.error(`No such problem directory: problems/${slug}`);
+    process.exit(1);
+  }
 }
 
 const workDir = mkdtempSync(path.join(tmpdir(), "leetclash-validate-"));

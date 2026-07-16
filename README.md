@@ -31,6 +31,9 @@ pnpm --filter @leetclash/api db:seed
 
 # run everything (web :3000, api :4000, realtime :4001)
 pnpm dev
+
+# in another terminal: the judging + match-lifecycle worker
+pnpm --filter @leetclash/api dev:worker
 ```
 
 Validate the problem bank (reference solutions must pass, bad ones must fail):
@@ -41,4 +44,6 @@ pnpm problems:validate
 
 ## Status
 
-Phase 0 (foundations) — see PLAN.md §9 for the roadmap.
+Phase 1 (playable MVP) — private rooms with invite codes, Speed Race duels
+(Python + C++), Run/Submit via Judge0, live opponent progress, results screen
+with code reveal and rematch, 15-problem bank. See PLAN.md §9 for the roadmap.

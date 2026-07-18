@@ -3,8 +3,8 @@
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import type { Language, MatchDetail, SubmissionResult } from "@leetclash/shared";
-import { SUBMIT_THROTTLE_SEC } from "@leetclash/shared";
+import type { Language, MatchDetail, PlayerReveal, SubmissionResult } from "@leetclash/shared";
+import { SUBMIT_THROTTLE_SEC, isSameLanguageMode } from "@leetclash/shared";
 import CodeEditor from "@/components/CodeEditor";
 import OpponentProgress from "@/components/OpponentProgress";
 import {
@@ -14,7 +14,7 @@ import {
   pollSubmission,
   requestRematch,
 } from "@/lib/api";
-import { joinMatch } from "@/lib/socket";
+import { identify, joinMatch } from "@/lib/socket";
 import { useMatchStore } from "@/stores/match";
 
 /** Re-render on an interval — drives the countdown and match clocks. */
@@ -47,6 +47,8 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
   const rematchMatchId = useMatchStore((s) => s.rematchMatchId);
   const detailVersion = useMatchStore((s) => s.detailVersion);
   const myUserId = useMatchStore((s) => s.myUserId);
+  const opponentDisconnected = useMatchStore((s) => s.opponentDisconnected);
+  const opponentGraceSec = useMatchStore((s) => s.opponentGraceSec);
   const setMatch = useMatchStore((s) => s.setMatch);
   const applyMatchEvent = useMatchStore((s) => s.applyMatchEvent);
   const applyState = useMatchStore((s) => s.applyState);
@@ -62,10 +64,15 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
     source: "",
     language: "python",
   });
+  // Paste telemetry accumulated since the last Submit (§6.6 anti-cheat).
+  const pasteRef = useRef<{ count: number; largest: number }>({ count: 0, largest: 0 });
 
   useEffect(() => {
     // Guest id until real auth sessions land (see lib/api.ts).
-    setMatch(id, getStoredGuest()?.id ?? null);
+    const guestId = getStoredGuest()?.id ?? null;
+    setMatch(id, guestId);
+    // Announce identity so the gateway can attribute presence/abandon (§3.2).
+    if (guestId) identify(guestId);
     return joinMatch(id, applyMatchEvent, applyState);
   }, [id, setMatch, applyMatchEvent, applyState]);
 
@@ -104,13 +111,24 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
       setActionError(null);
       setJudging(kind);
       const { source, language } = codeRef.current;
-      const created = await createSubmission({ matchId: id, language, source, kind });
+      const paste = pasteRef.current;
+      const created = await createSubmission({
+        matchId: id,
+        language,
+        source,
+        kind,
+        pasteCount: paste.count,
+        largestPaste: paste.largest,
+      });
       if (!created.ok) {
         setJudging(null);
         setActionError(created.error);
         return;
       }
-      if (kind === "submit") setCooldownUntil(Date.now() + SUBMIT_THROTTLE_SEC * 1000);
+      if (kind === "submit") {
+        setCooldownUntil(Date.now() + SUBMIT_THROTTLE_SEC * 1000);
+        pasteRef.current = { count: 0, largest: 0 }; // telemetry is per-submit
+      }
       const result = await pollSubmission(created.data.submissionId);
       setJudging(null);
       if (result.ok) setMyLastResult(result.data);
@@ -141,8 +159,17 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
   return (
     <div className="flex h-[calc(100vh-49px)] flex-col">
       <div className="flex items-center justify-between border-b border-edge bg-panel px-4 py-1.5 font-mono text-xs text-zinc-500">
-        <span>
-          match <span className="text-zinc-300">{id.slice(0, 8)}</span>
+        <span className="flex items-center gap-2">
+          <span className="text-zinc-300">{(detail?.mode ?? "").replace(/_/g, " ") || "match"}</span>
+          {detail?.ranked ? (
+            <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] uppercase text-accent">
+              ranked
+            </span>
+          ) : detail ? (
+            <span className="rounded border border-edge px-1.5 py-0.5 text-[10px] uppercase text-zinc-500">
+              casual
+            </span>
+          ) : null}
         </span>
         {live && endsAt !== null && (
           <span>
@@ -153,6 +180,12 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
           status <span className="text-accent">{effectiveStatus ?? "connecting…"}</span>
         </span>
       </div>
+
+      {live && opponentDisconnected && (
+        <div className="border-b border-amber-900/60 bg-amber-950/40 px-4 py-1.5 text-center text-xs text-amber-300">
+          Opponent disconnected — they have {opponentGraceSec ?? 60}s to reconnect or they forfeit.
+        </div>
+      )}
 
       <div className="relative flex min-h-0 flex-1">
         {/* Countdown overlay: problem is about to be revealed. */}
@@ -185,8 +218,15 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
           <div className="min-h-0 flex-1">
             <CodeEditor
               starterCode={detail?.problem?.starterCode}
+              lockedLanguage={
+                detail && isSameLanguageMode(detail.mode) ? detail.language : undefined
+              }
               onChange={(source, language) => {
                 codeRef.current = { source, language };
+              }}
+              onPaste={(size) => {
+                pasteRef.current.count += 1;
+                pasteRef.current.largest = Math.max(pasteRef.current.largest, size);
               }}
             />
           </div>
@@ -318,6 +358,23 @@ function ResultBadge({ result }: { result: SubmissionResult }) {
   );
 }
 
+/** Glicko-2 rating change on the results screen — ranked matches only. */
+function RatingDelta({ reveal, ranked }: { reveal: PlayerReveal; ranked: boolean }) {
+  if (!ranked || reveal.ratingBefore === null || reveal.ratingAfter === null) return null;
+  const before = Math.round(reveal.ratingBefore);
+  const after = Math.round(reveal.ratingAfter);
+  const delta = after - before;
+  return (
+    <span>
+      rating {before}→<span className="text-zinc-300">{after}</span>{" "}
+      <span className={delta >= 0 ? "text-green-400" : "text-red-400"}>
+        ({delta >= 0 ? "+" : ""}
+        {delta})
+      </span>
+    </span>
+  );
+}
+
 function ResultsScreen({
   detail,
   myUserId,
@@ -344,7 +401,8 @@ function ResultsScreen({
     <div className="mx-auto max-w-5xl px-6 py-10">
       <div className="text-center">
         <p className="text-xs uppercase tracking-widest text-zinc-500">
-          {detail.problem?.title ?? "match"} — speed race
+          {detail.problem?.title ?? "match"} — {detail.mode.replace(/_/g, " ")}
+          {detail.ranked ? " · ranked" : ""}
         </p>
         <h1 className="mt-2 text-3xl font-bold">
           {winnerId === null ? (
@@ -398,12 +456,16 @@ function ResultsScreen({
                   )}
                 </span>
               </div>
-              <div className="flex gap-4 border-b border-edge px-4 py-2 font-mono text-xs text-zinc-500">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-edge px-4 py-2 font-mono text-xs text-zinc-500">
                 <span>{r.language ?? "—"}</span>
                 {clock && <span>solved in {clock}</span>}
-                {r.timeMs !== null && <span>{r.timeMs}ms</span>}
+                {r.benchmarkMs !== null && (
+                  <span className="text-accent">{r.benchmarkMs}ms benchmark</span>
+                )}
+                {r.benchmarkMs === null && r.timeMs !== null && <span>{r.timeMs}ms</span>}
                 {r.bytes !== null && <span>{r.bytes}B</span>}
                 <span>{r.submitCount} submit{r.submitCount === 1 ? "" : "s"}</span>
+                <RatingDelta reveal={r} ranked={detail.ranked} />
               </div>
               <pre className="max-h-96 overflow-auto p-4 font-mono text-xs leading-relaxed text-zinc-300">
                 {r.source ?? "— nothing submitted —"}

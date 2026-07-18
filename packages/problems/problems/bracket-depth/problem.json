@@ -1,0 +1,15 @@
+{
+  "slug": "bracket-depth",
+  "title": "Nested Crates",
+  "difficulty": "easy",
+  "tags": ["stack", "strings", "parsing"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": { "python": { "timeLimitMs": 5000 } }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    s = sys.stdin.readline().rstrip(\"\\n\")\n    # TODO: print the maximum nesting depth, or -1 if the brackets are invalid\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <iostream>\n#include <string>\nusing namespace std;\n\nint main() {\n    string s;\n    getline(cin, s);\n    // TODO: print the maximum nesting depth, or -1 if the brackets are invalid\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

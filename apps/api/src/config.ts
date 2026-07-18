@@ -8,7 +8,9 @@ const EnvSchema = z.object({
   DATABASE_URL: z
     .string()
     .min(1)
-    .default("postgres://leetclash:leetclash@localhost:5432/leetclash"),
+    // Dev docker-compose publishes postgres on 5433 (5432 collides with a
+    // host-installed postgres on macOS — see infra/docker-compose.yml).
+    .default("postgres://leetclash:leetclash@localhost:5433/leetclash"),
   REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
   JUDGE0_URL: z.string().min(1).default("http://localhost:2358"),
   /**

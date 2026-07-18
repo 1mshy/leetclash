@@ -250,6 +250,11 @@ export const submissions = pgTable(
     status: submissionStatusEnum("status").notNull().default("pending"),
     verdict: verdictEnum("verdict"),
     timeMs: integer("time_ms"),
+    /**
+     * Summed CPU time across the whole suite (ms) — the same unit the §1.2
+     * benchmark medians, so live standings and the final ranking agree.
+     */
+    timeSumMs: integer("time_sum_ms"),
     memoryKb: integer("memory_kb"),
     /** Tests passed before the first failure / total tests run. */
     testsPassed: integer("tests_passed"),
@@ -258,6 +263,16 @@ export const submissions = pgTable(
     detail: text("detail"),
     /** Highest Scaling Duel tier passed. */
     tierReached: integer("tier_reached"),
+    /**
+     * Benchmarked median CPU time (ms) from the §1.2 protocol — set only for
+     * Fastest Runtime finalists at the fixed-window close, never from the
+     * fast-feedback judging path.
+     */
+    benchmarkMs: integer("benchmark_ms"),
+    /** Anti-cheat telemetry (§6.6): paste events recorded before this submit. */
+    pasteCount: integer("paste_count").notNull().default(0),
+    /** Size (chars) of the largest single paste this editing session. */
+    largestPaste: integer("largest_paste").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -283,4 +298,32 @@ export const matchEvents = pgTable(
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("match_events_match_seq_uq").on(t.matchId, t.seq)],
+);
+
+// ─── similarity_flags (anti-cheat collusion review queue, §6.5) ──────────────
+
+export const similarityFlags = pgTable(
+  "similarity_flags",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    matchId: uuid("match_id")
+      .notNull()
+      .references(() => matches.id, { onDelete: "cascade" }),
+    /** The two players whose accepted sources were fingerprinted. */
+    userA: uuid("user_a")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    userB: uuid("user_b")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Winnowing (MOSS-style) similarity in [0,1]; 1 = identical fingerprints. */
+    score: doublePrecision("score").notNull(),
+    /** True once similarity crossed the flag threshold — feeds a review queue. */
+    flagged: boolean("flagged").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("similarity_flags_match_idx").on(t.matchId),
+    index("similarity_flags_flagged_idx").on(t.flagged),
+  ],
 );

@@ -36,6 +36,9 @@ interface MatchState {
   opponent: OpponentProgress;
   myLastResult: SubmissionResult | null;
   winnerId: string | null;
+  /** Opponent dropped and is inside the reconnect grace window (§3.2). */
+  opponentDisconnected: boolean;
+  opponentGraceSec: number | null;
   /** Set by a rematch event; the match page navigates there. */
   rematchMatchId: string | null;
   /** Bumped when REST match detail may have changed (reveal, finish, …). */
@@ -58,6 +61,8 @@ const initial = {
   opponent: emptyProgress,
   myLastResult: null,
   winnerId: null,
+  opponentDisconnected: false,
+  opponentGraceSec: null,
   rematchMatchId: null,
 };
 
@@ -136,8 +141,18 @@ export const useMatchStore = create<MatchState>((set, get) => ({
         }
         break;
       case "player_disconnected":
+        if (e.payload.userId !== myUserId) {
+          set({ opponentDisconnected: true, opponentGraceSec: e.payload.graceSec });
+        }
+        break;
       case "player_reconnected":
-        // TODO(phase2): surface opponent presence in the UI.
+        if (e.payload.userId !== myUserId) {
+          set({ opponentDisconnected: false, opponentGraceSec: null });
+        }
+        break;
+      case "benchmark":
+      case "rating_updated":
+        // Surfaced on the results screen from MatchDetail; no live store change.
         break;
       case "match_finished":
         set((s) => ({

@@ -1,48 +1,67 @@
+import type { Redis } from "ioredis";
 import type { Server, Socket } from "socket.io";
+import { PRESENCE_EVENTS_CHANNEL, type PresenceSignal } from "@leetclash/shared";
 
 /**
- * Minimal presence skeleton: an in-memory socket.id → matchIds mapping so we
- * know which matches a dropped socket was watching.
+ * Presence tracking (PLAN §3.2). The gateway reports raw connectivity only — it
+ * publishes connect/disconnect PresenceSignals to Redis and never decides match
+ * outcomes; the api/worker owns the 60s grace timer and the abandon decision.
  *
- * Deliberately NOT here: publishing player_disconnected events or running the
- * 60s reconnect grace period (§3.2). That timer belongs to the match state
- * machine (api/matchmaker) — the gateway only reports connectivity; it never
- * decides match outcomes. In-memory is fine for a single gateway instance;
- * multi-instance presence will move to Redis keys (e.g.
- * `presence:{matchId}:{userId}`) in Phase 1 once sockets carry a userId.
+ * Membership is a Redis SET per (matchId, userId) of that user's live socket
+ * ids, so a user with two tabs isn't reported as disconnected when one closes.
+ * A signal fires only on the true edges: the set going empty→1 (connect) or
+ * 1→empty (disconnect).
  */
-const socketMatches = new Map<string, Set<string>>();
+const presenceKey = (matchId: string, userId: string): string => `presence:${matchId}:${userId}`;
+const PRESENCE_TTL_SEC = 24 * 60 * 60;
 
-export function trackJoin(socketId: string, matchId: string): void {
-  let matches = socketMatches.get(socketId);
-  if (!matches) {
-    matches = new Set();
-    socketMatches.set(socketId, matches);
+async function publish(redis: Redis, signal: PresenceSignal): Promise<void> {
+  await redis.publish(PRESENCE_EVENTS_CHANNEL, JSON.stringify(signal));
+}
+
+/** Record that this socket is present in a match room; signal on first connect. */
+export async function joinPresence(redis: Redis, socket: Socket, matchId: string): Promise<void> {
+  const userId = socket.data.userId as string | undefined;
+  if (!userId) return; // not identified — can't attribute presence
+
+  const rooms: Set<string> = socket.data.matchRooms ?? (socket.data.matchRooms = new Set());
+  rooms.add(matchId);
+
+  const key = presenceKey(matchId, userId);
+  await redis.sadd(key, socket.id);
+  await redis.expire(key, PRESENCE_TTL_SEC);
+  const count = await redis.scard(key);
+  if (count === 1) await publish(redis, { type: "connect", matchId, userId });
+}
+
+/** Drop this socket from a match room; signal on last disconnect. */
+export async function leavePresence(redis: Redis, socket: Socket, matchId: string): Promise<void> {
+  const userId = socket.data.userId as string | undefined;
+  if (!userId) return;
+
+  const rooms: Set<string> | undefined = socket.data.matchRooms;
+  rooms?.delete(matchId);
+
+  const key = presenceKey(matchId, userId);
+  await redis.srem(key, socket.id);
+  const count = await redis.scard(key);
+  if (count === 0) {
+    await redis.del(key);
+    await publish(redis, { type: "disconnect", matchId, userId });
   }
-  matches.add(matchId);
 }
 
-export function trackLeave(socketId: string, matchId: string): void {
-  const matches = socketMatches.get(socketId);
-  if (!matches) return;
-  matches.delete(matchId);
-  if (matches.size === 0) socketMatches.delete(socketId);
-}
-
-export function registerPresenceHandlers(io: Server): void {
+export function registerPresenceHandlers(io: Server, redis: Redis): void {
   io.on("connection", (socket: Socket) => {
     socket.on("disconnect", (reason: string) => {
-      const matches = socketMatches.get(socket.id);
-      socketMatches.delete(socket.id);
-      if (!matches || matches.size === 0) return;
-
-      // TODO(Phase 1 — §3.2 disconnect handling): once sockets are
-      // authenticated, notify the match state machine (api) that this user
-      // dropped so IT can start the 60s grace period and, on expiry, emit
-      // player_disconnected / abandon events. Not implemented here on purpose.
-      console.log(
-        `[realtime] socket ${socket.id} disconnected (${reason}) while in matches: ${[...matches].join(", ")}`,
-      );
+      const rooms: Set<string> | undefined = socket.data.matchRooms;
+      if (!rooms || rooms.size === 0) return;
+      // Copy — leavePresence mutates the set as it goes.
+      for (const matchId of [...rooms]) {
+        void leavePresence(redis, socket, matchId).catch((err) =>
+          console.error(`[realtime] presence leave error (${reason}):`, err),
+        );
+      }
     });
   });
 }

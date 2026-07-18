@@ -6,6 +6,8 @@ import { z } from "zod";
 export const COUNTDOWN_SECONDS = 5;
 /** Minimum seconds between two Submits per player per match (§1.2). */
 export const SUBMIT_THROTTLE_SEC = 10;
+/** Grace period to reconnect before a disconnect becomes an abandon (§3.2). */
+export const DISCONNECT_GRACE_SEC = 60;
 
 // ─── Modes & languages ────────────────────────────────────────────────────────
 

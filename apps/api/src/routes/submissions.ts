@@ -21,7 +21,7 @@ export const submissionRoutes: FastifyPluginAsync = async (app) => {
     if (!body.success) {
       return reply.status(400).send({ error: body.error.flatten().fieldErrors });
     }
-    const { userId, matchId, language, source, kind } = body.data;
+    const { userId, matchId, language, source, kind, pasteCount, largestPaste } = body.data;
 
     const [match] = await db
       .select({ status: matches.status, problemId: matches.problemId })
@@ -76,6 +76,9 @@ export const submissionRoutes: FastifyPluginAsync = async (app) => {
         sourceInline: source,
         bytes: Buffer.byteLength(source, "utf8"),
         kind,
+        // Anti-cheat telemetry (§6.6) — recorded, surfaced to the review queue.
+        pasteCount,
+        largestPaste,
       })
       .returning({ id: submissions.id });
     if (!submission) return reply.status(500).send({ error: "failed to persist submission" });

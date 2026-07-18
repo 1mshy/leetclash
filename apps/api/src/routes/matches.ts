@@ -44,6 +44,8 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
         id: matchPlayers.userId,
         handle: users.handle,
         result: matchPlayers.result,
+        ratingBefore: matchPlayers.ratingBefore,
+        ratingAfter: matchPlayers.ratingAfter,
       })
       .from(matchPlayers)
       .innerJoin(users, eq(matchPlayers.userId, users.id))
@@ -92,16 +94,22 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const results =
-      match.status === "finished" ? await buildResults(matchId, players) : null;
+      match.status === "finished" ? await buildResults(matchId, match.mode, players) : null;
 
-    const cfg = match.config as { inviteCode?: string; timeLimitSec?: number };
+    const cfg = match.config as {
+      inviteCode?: string;
+      timeLimitSec?: number;
+      ranked?: boolean;
+    };
     const detail: MatchDetail = {
       id: match.id,
       mode: match.mode,
       status: match.status,
+      ranked: cfg.ranked === true,
+      language: match.language,
       inviteCode: cfg.inviteCode ?? null,
       timeLimitSec: Number(cfg.timeLimitSec ?? 1800),
-      players,
+      players: players.map((p) => ({ id: p.id, handle: p.handle, result: p.result })),
       problem,
       startedAt: match.startedAt?.toISOString() ?? null,
       endedAt: match.endedAt?.toISOString() ?? null,
@@ -201,10 +209,21 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
   });
 };
 
-/** Per-player reveal: the accepted submit if any, else the latest submit. */
+/**
+ * Per-player reveal (§1.1 step 5). The shown submission is the one that decided
+ * the mode's metric — smallest accepted source for Code Golf, benchmarked/
+ * fastest accepted for Fastest Runtime, first accepted for Speed Race — falling
+ * back to the latest submit if the player never solved it.
+ */
 async function buildResults(
   matchId: string,
-  players: { id: string; handle: string }[],
+  mode: string,
+  players: {
+    id: string;
+    handle: string;
+    ratingBefore: number | null;
+    ratingAfter: number | null;
+  }[],
 ): Promise<PlayerReveal[]> {
   const subs = await db
     .select({
@@ -215,6 +234,7 @@ async function buildResults(
       timeMs: submissions.timeMs,
       memoryKb: submissions.memoryKb,
       bytes: submissions.bytes,
+      benchmarkMs: submissions.benchmarkMs,
       createdAt: submissions.createdAt,
     })
     .from(submissions)
@@ -232,8 +252,21 @@ async function buildResults(
 
   return players.map((p) => {
     const mine = subs.filter((s) => s.userId === p.id);
-    const accepted = mine.find((s) => s.verdict === "accepted");
-    const shown = accepted ?? mine[0];
+    const accepted = mine.filter((s) => s.verdict === "accepted");
+    const acceptedFirst = accepted[accepted.length - 1]; // oldest accepted (desc order)
+    let shown = acceptedFirst ?? mine[0];
+    if (accepted.length > 0) {
+      if (mode === "code_golf") {
+        shown = accepted.reduce((a, b) => (b.bytes < a.bytes ? b : a));
+      } else if (mode === "fastest_runtime") {
+        const benched = accepted.find((s) => s.benchmarkMs !== null);
+        shown =
+          benched ??
+          accepted.reduce((a, b) =>
+            (b.timeMs ?? Infinity) < (a.timeMs ?? Infinity) ? b : a,
+          );
+      }
+    }
     return {
       userId: p.id,
       handle: p.handle,
@@ -244,7 +277,10 @@ async function buildResults(
       memoryKb: shown?.memoryKb ?? null,
       bytes: shown?.bytes ?? null,
       submitCount: mine.length,
-      acceptedAt: accepted?.createdAt.toISOString() ?? null,
+      acceptedAt: acceptedFirst?.createdAt.toISOString() ?? null,
+      benchmarkMs: shown?.benchmarkMs ?? null,
+      ratingBefore: p.ratingBefore,
+      ratingAfter: p.ratingAfter,
     };
   });
 }

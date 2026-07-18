@@ -15,6 +15,15 @@ export const PlayerProgress = z.object({
   /** Submit-kind submissions only; Run doesn't count toward the match. */
   submissionCount: z.number().int(),
   lastVerdict: Verdict.nullable(),
+  /** Has at least one accepted Submit — the fixed-window "in contention" flag. */
+  accepted: z.boolean(),
+  /**
+   * Best value of the mode's win metric so far (bytes for Code Golf, summed
+   * suite CPU ms for Fastest Runtime — the same unit the §1.2 benchmark
+   * medians), among this player's accepted submits. null until they have an
+   * accepted submission. Drives live standings in fixed-window modes.
+   */
+  bestMetric: z.number().nullable(),
 });
 export type PlayerProgress = z.infer<typeof PlayerProgress>;
 
@@ -75,6 +84,11 @@ export const PlayerReveal = z.object({
   submitCount: z.number().int(),
   /** ISO timestamp of the accepted submission, if any. */
   acceptedAt: z.string().nullable(),
+  /** Benchmarked median CPU time (ms) — Fastest Runtime only (§1.2). */
+  benchmarkMs: z.number().nullable(),
+  /** Glicko-2 rating before/after this match — ranked matches only. */
+  ratingBefore: z.number().nullable(),
+  ratingAfter: z.number().nullable(),
 });
 export type PlayerReveal = z.infer<typeof PlayerReveal>;
 
@@ -82,6 +96,10 @@ export const MatchDetail = z.object({
   id: z.string().uuid(),
   mode: GameMode,
   status: MatchStatus,
+  /** Ranked (matchmade, rated) vs casual (private room). */
+  ranked: z.boolean(),
+  /** Match language for same-language modes; null = cross-language. */
+  language: Language.nullable(),
   inviteCode: z.string().nullable(),
   timeLimitSec: z.number().int(),
   players: z.array(MatchPlayer),
@@ -116,6 +134,10 @@ export const CreateSubmissionRequest = z.object({
   language: Language,
   source: z.string().min(1).max(256 * 1024),
   kind: z.enum(["run", "submit"]),
+  /** Anti-cheat telemetry (§6.6): paste events since the last submit. */
+  pasteCount: z.number().int().nonnegative().default(0),
+  /** Size (chars) of the largest single paste in this editing session. */
+  largestPaste: z.number().int().nonnegative().default(0),
 });
 export type CreateSubmissionRequest = z.infer<typeof CreateSubmissionRequest>;
 

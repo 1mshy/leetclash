@@ -4,7 +4,7 @@
  * (connection only happens when a helper is called in the browser).
  */
 import { io, type Socket } from "socket.io-client";
-import { WS_EVENTS, type LiveMatchState, type MatchEvent } from "@leetclash/shared";
+import { WS_EVENTS, type LiveMatchState, type MatchEvent, type UserEvent } from "@leetclash/shared";
 
 const REALTIME_URL =
   process.env.NEXT_PUBLIC_REALTIME_URL ?? "http://localhost:4001";
@@ -57,6 +57,36 @@ export function joinMatch(
 
 export function leaveMatch(matchId: string): void {
   getSocket().emit(WS_EVENTS.LEAVE_MATCH, { matchId });
+}
+
+/**
+ * Join the per-user room and subscribe to user-scoped pushes (queue_matched).
+ * A queued player has no match room yet, so this is how the matchmaker reaches
+ * them. Re-identifies on reconnect (rooms don't survive a reconnect).
+ */
+export function subscribeUserEvents(
+  userId: string,
+  onEvent: (event: UserEvent) => void,
+): () => void {
+  const s = getSocket();
+  const identify = () => s.emit(WS_EVENTS.IDENTIFY, { userId });
+  identify();
+  s.on("connect", identify);
+
+  const handler = (event: UserEvent) => {
+    if (event.userId === userId) onEvent(event);
+  };
+  s.on(WS_EVENTS.USER_EVENT, handler);
+
+  return () => {
+    s.off("connect", identify);
+    s.off(WS_EVENTS.USER_EVENT, handler);
+  };
+}
+
+/** Announce identity for a match connection (enables presence/abandon, §3.2). */
+export function identify(userId: string): void {
+  getSocket().emit(WS_EVENTS.IDENTIFY, { userId });
 }
 
 export function disconnectSocket(): void {

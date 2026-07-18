@@ -29,7 +29,10 @@ services:
       POSTGRES_PASSWORD: leetclash
       POSTGRES_DB: leetclash
     ports:
-      - "5432:5432"
+      # Published on 5433, not 5432: a Homebrew postgres@17 on the dev host
+      # binds ::1:5432 and shadows this container for `localhost` connections
+      # (localhost resolves to ::1 first). 5433 keeps the app's DB unambiguous.
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

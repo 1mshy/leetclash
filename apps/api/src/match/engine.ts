@@ -12,16 +12,22 @@
 import { Queue } from "bullmq";
 import type { Job } from "bullmq";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
-import { COUNTDOWN_SECONDS, MatchConfig } from "@leetclash/shared";
+import { COUNTDOWN_SECONDS, MatchConfig, isFixedWindowMode } from "@leetclash/shared";
 import { db } from "../db/client.js";
 import { matches, matchPlayers, problems } from "../db/schema.js";
 import { createRedisConnection } from "../queue/submissions.js";
+import { runSimilarityCheck } from "./anticheat.js";
 import { appendMatchEvent, refreshMatchState, storeCountdownEndsAt } from "./events.js";
+import { processAbandon } from "./presence.js";
+import { applyRatingChanges } from "./ratings.js";
+import { resolveFixedWindowMatch } from "./resolve.js";
 
 export const MATCH_LIFECYCLE_QUEUE_NAME = "match-lifecycle";
 
 export interface LifecycleJobData {
   matchId: string;
+  /** For "abandon" grace jobs: the player who dropped (may reconnect first). */
+  userId?: string;
 }
 
 export const matchLifecycleQueue = new Queue<LifecycleJobData>(MATCH_LIFECYCLE_QUEUE_NAME, {
@@ -49,6 +55,10 @@ export async function processLifecycleJob(job: Job<LifecycleJobData>): Promise<v
       return revealProblem(matchId);
     case "timeout":
       return timeoutMatch(matchId);
+    case "abandon":
+      return processAbandon(matchId, job.data.userId);
+    case "similarity":
+      return runSimilarityCheck(matchId);
     default:
       throw new Error(`unknown lifecycle job "${job.name}"`);
   }
@@ -138,9 +148,25 @@ async function pickRandomProblem(
   return fallback ?? null;
 }
 
-/** Hard cap hit with no winner: Speed Race sudden death ends in a draw. */
+/**
+ * Wall-clock window closed. Speed Race is sudden death, so hitting the cap with
+ * no winner is a draw. Fixed-window modes (Code Golf, Fastest Runtime) treat
+ * the close as the NORMAL end: the winner is computed by metric among the
+ * accepted solutions (see match/resolve.ts).
+ */
 async function timeoutMatch(matchId: string): Promise<void> {
-  await finishMatch(matchId, null, "timeout");
+  const [match] = await db
+    .select({ mode: matches.mode })
+    .from(matches)
+    .where(eq(matches.id, matchId))
+    .limit(1);
+  if (!match) return;
+
+  if (isFixedWindowMode(match.mode)) {
+    await resolveFixedWindowMatch(matchId);
+  } else {
+    await finishMatch(matchId, null, "timeout");
+  }
 }
 
 /**
@@ -161,7 +187,7 @@ export async function finishMatch(
         inArray(matches.status, ["matched", "countdown", "live", "judging"]),
       ),
     )
-    .returning({ id: matches.id });
+    .returning({ id: matches.id, mode: matches.mode, language: matches.language, config: matches.config });
   if (!claimed) return false;
 
   if (winnerId) {
@@ -169,9 +195,10 @@ export async function finishMatch(
       .update(matchPlayers)
       .set({ result: "win" })
       .where(and(eq(matchPlayers.matchId, matchId), eq(matchPlayers.userId, winnerId)));
+    // The forfeiter's result is "abandon" (distinct from an in-play loss).
     await db
       .update(matchPlayers)
-      .set({ result: "loss" })
+      .set({ result: reason === "abandon" ? "abandon" : "loss" })
       .where(and(eq(matchPlayers.matchId, matchId), ne(matchPlayers.userId, winnerId)));
   } else {
     await db
@@ -180,7 +207,23 @@ export async function finishMatch(
       .where(eq(matchPlayers.matchId, matchId));
   }
 
+  // Ranked matches move ratings (Glicko-2) before the finish event fires, so a
+  // client fetching MatchDetail on match_finished already sees rating deltas.
+  const ranked = (claimed.config as { ranked?: boolean }).ranked === true;
+  if (ranked) {
+    try {
+      await applyRatingChanges(matchId, claimed.mode, claimed.language, winnerId);
+    } catch (err) {
+      console.error(`[engine] rating update failed for match ${matchId}:`, err);
+    }
+  }
+
   await appendMatchEvent(matchId, "match_finished", { winnerId, reason });
   await refreshMatchState(matchId);
+
+  // Post-match collusion check (§6.5) — durable job, off the finish path.
+  await matchLifecycleQueue
+    .add("similarity", { matchId })
+    .catch((err) => console.error(`[engine] failed to enqueue similarity check:`, err));
   return true;
 }

@@ -6,6 +6,7 @@ import { startMatchEventBridge } from "./bridge.js";
 import { loadConfig } from "./config.js";
 import { registerPresenceHandlers } from "./presence.js";
 import { registerRoomHandlers } from "./rooms.js";
+import { startUserEventBridge } from "./user-bridge.js";
 
 const config = loadConfig();
 
@@ -17,11 +18,15 @@ const config = loadConfig();
 const pubClient = new Redis(config.REDIS_URL);
 const subClient = pubClient.duplicate();
 const eventSub = pubClient.duplicate();
+// A subscribed connection can't run other commands, and each channel needs its
+// own subscriber — user-events (queue notifications) gets a dedicated one.
+const userSub = pubClient.duplicate();
 
 for (const [name, client] of [
   ["pub", pubClient],
   ["sub", subClient],
   ["event-sub", eventSub],
+  ["user-sub", userSub],
 ] as const) {
   client.on("error", (err) => console.error(`[realtime] redis ${name} error:`, err.message));
 }
@@ -48,8 +53,9 @@ const io = new Server(httpServer, {
 // attaching userId to socket.data before any room handler runs.
 
 registerRoomHandlers(io, pubClient);
-registerPresenceHandlers(io);
+registerPresenceHandlers(io, pubClient);
 await startMatchEventBridge(io, eventSub);
+await startUserEventBridge(io, userSub);
 
 httpServer.listen(config.REALTIME_PORT, () => {
   console.log(
@@ -68,6 +74,7 @@ async function shutdown(signal: string): Promise<void> {
   // io.close() disconnects sockets and closes the underlying HTTP server.
   await io.close();
   eventSub.disconnect();
+  userSub.disconnect();
   subClient.disconnect();
   pubClient.disconnect();
 

@@ -15,6 +15,20 @@
       "when": 1784167932292,
       "tag": "0001_stiff_red_skull",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784172420282,
+      "tag": "0002_phase2_ratings_anticheat",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784395265249,
+      "tag": "0003_submission_time_sum_ms",
+      "breakpoints": true
     }
   ]
 }

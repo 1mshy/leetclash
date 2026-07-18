@@ -1,0 +1,15 @@
+{
+  "slug": "window-sum",
+  "title": "Patrol Window",
+  "difficulty": "easy",
+  "tags": ["sliding-window", "arrays", "prefix-sum"],
+  "limits": {
+    "baseline": { "timeLimitMs": 1000, "memoryLimitKb": 262144 },
+    "overrides": { "python": { "timeLimitMs": 5000 } }
+  },
+  "starterCode": {
+    "python": "import sys\n\ndef main() -> None:\n    data = sys.stdin.read().split()\n    n, k = int(data[0]), int(data[1])\n    a = [int(x) for x in data[2:2 + n]]\n    # TODO: print the maximum sum of any length-k contiguous window\n\nif __name__ == \"__main__\":\n    main()\n",
+    "cpp": "#include <algorithm>\n#include <iostream>\n#include <vector>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    long long n, k;\n    cin >> n >> k;\n    vector<long long> a(n);\n    for (auto &x : a) cin >> x;\n    // TODO: print the maximum sum of any length-k contiguous window\n    return 0;\n}\n"
+  },
+  "publicTests": [0, 1]
+}

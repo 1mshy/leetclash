@@ -24,6 +24,12 @@ export default function RootLayout({
           >
             Lobby
           </Link>
+          <Link
+            href="/leaderboard"
+            className="text-sm text-zinc-400 transition-colors hover:text-zinc-100"
+          >
+            Leaderboard
+          </Link>
         </nav>
         <main>{children}</main>
       </body>

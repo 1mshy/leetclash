@@ -1,0 +1,1 @@
+ALTER TABLE "submissions" ADD COLUMN "time_sum_ms" integer;

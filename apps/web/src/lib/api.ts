@@ -6,10 +6,17 @@
 import type {
   CreateRoomResponse,
   CreateSubmissionResponse,
+  GameMode,
   GuestUser,
   JoinRoomResponse,
   Language,
+  LeaderboardResponse,
   MatchDetail,
+  MatchHistoryResponse,
+  ProfileDetail,
+  QueueJoinResponse,
+  QueueMode,
+  QueueStatusResponse,
   RematchResponse,
   SubmissionResult,
 } from "@leetclash/shared";
@@ -119,6 +126,9 @@ export async function createSubmission(params: {
   language: Language;
   source: string;
   kind: "run" | "submit";
+  /** Anti-cheat telemetry (§6.6): paste events since the last submit. */
+  pasteCount?: number;
+  largestPaste?: number;
 }): Promise<ApiResult<CreateSubmissionResponse>> {
   const guest = await ensureGuest();
   if (!guest.ok) return guest;
@@ -126,6 +136,56 @@ export async function createSubmission(params: {
     method: "POST",
     body: JSON.stringify({ ...params, userId: guest.data.id }),
   });
+}
+
+// ─── Ranked matchmaking (Phase 2 §3.1) ───────────────────────────────────────
+
+export async function joinQueue(
+  mode: QueueMode,
+  language: Language,
+): Promise<ApiResult<QueueJoinResponse>> {
+  const guest = await ensureGuest();
+  if (!guest.ok) return guest;
+  return apiFetch<QueueJoinResponse>("/queue/join", {
+    method: "POST",
+    body: JSON.stringify({ userId: guest.data.id, mode, language }),
+  });
+}
+
+export async function leaveQueue(): Promise<ApiResult<{ ok: boolean }>> {
+  const guest = getStoredGuest();
+  if (!guest) return { ok: true, data: { ok: true } };
+  return apiFetch<{ ok: boolean }>("/queue/leave", {
+    method: "POST",
+    body: JSON.stringify({ userId: guest.id }),
+  });
+}
+
+export async function getQueueStatus(): Promise<ApiResult<QueueStatusResponse>> {
+  const guest = getStoredGuest();
+  if (!guest) return { ok: false, error: "no guest identity" };
+  return apiFetch<QueueStatusResponse>(`/queue/status?userId=${encodeURIComponent(guest.id)}`);
+}
+
+// ─── Leaderboards + profiles (Phase 2 §1.3) ──────────────────────────────────
+
+export async function getLeaderboard(
+  mode: GameMode,
+  language?: Language,
+): Promise<ApiResult<LeaderboardResponse>> {
+  const q = new URLSearchParams({ mode });
+  if (language) q.set("language", language);
+  return apiFetch<LeaderboardResponse>(`/leaderboards?${q.toString()}`);
+}
+
+export async function getProfile(handle: string): Promise<ApiResult<ProfileDetail>> {
+  return apiFetch<ProfileDetail>(`/users/${encodeURIComponent(handle)}`);
+}
+
+export async function getUserMatches(
+  userId: string,
+): Promise<ApiResult<MatchHistoryResponse>> {
+  return apiFetch<MatchHistoryResponse>(`/users/${encodeURIComponent(userId)}/matches`);
 }
 
 export async function getSubmission(

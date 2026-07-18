@@ -80,6 +80,7 @@ export async function refreshMatchState(matchId: string): Promise<LiveMatchState
   const [match] = await db
     .select({
       id: matches.id,
+      mode: matches.mode,
       status: matches.status,
       config: matches.config,
       startedAt: matches.startedAt,
@@ -106,6 +107,9 @@ export async function refreshMatchState(matchId: string): Promise<LiveMatchState
       verdict: submissions.verdict,
       testsPassed: submissions.testsPassed,
       testsTotal: submissions.testsTotal,
+      bytes: submissions.bytes,
+      timeMs: submissions.timeMs,
+      timeSumMs: submissions.timeSumMs,
     })
     .from(submissions)
     .where(and(eq(submissions.matchId, matchId), eq(submissions.kind, "submit")))
@@ -123,6 +127,22 @@ export async function refreshMatchState(matchId: string): Promise<LiveMatchState
     players: players.map((p) => {
       const mine = subs.filter((s) => s.userId === p.userId);
       const last = mine[0];
+      const acceptedSubs = mine.filter((s) => s.verdict === "accepted");
+      // Live standing for fixed-window modes: the best metric so far among this
+      // player's accepted submits (bytes for golf, summed suite ms for runtime
+      // — the same unit the final benchmark medians, so leading live means
+      // leading by the metric that actually decides the match).
+      let bestMetric: number | null = null;
+      if (acceptedSubs.length > 0) {
+        if (match.mode === "code_golf") {
+          bestMetric = Math.min(...acceptedSubs.map((s) => s.bytes));
+        } else if (match.mode === "fastest_runtime") {
+          const times = acceptedSubs
+            .map((s) => s.timeSumMs ?? s.timeMs) // timeMs: rows predating time_sum_ms
+            .filter((t): t is number => t !== null);
+          bestMetric = times.length > 0 ? Math.min(...times) : null;
+        }
+      }
       return {
         userId: p.userId,
         handle: p.handle,
@@ -130,6 +150,8 @@ export async function refreshMatchState(matchId: string): Promise<LiveMatchState
         testsTotal: last?.testsTotal ?? 0,
         submissionCount: mine.length,
         lastVerdict: last?.verdict ?? null,
+        accepted: acceptedSubs.length > 0,
+        bestMetric,
       };
     }),
     winnerId: match.winnerId,

@@ -86,6 +86,8 @@ export const PlayerReveal = z.object({
   acceptedAt: z.string().nullable(),
   /** Benchmarked median CPU time (ms) — Fastest Runtime only (§1.2). */
   benchmarkMs: z.number().nullable(),
+  /** Highest Scaling Duel tier passed — Scaling Duel only. */
+  tierReached: z.number().int().nullable(),
   /** Glicko-2 rating before/after this match — ranked matches only. */
   ratingBefore: z.number().nullable(),
   ratingAfter: z.number().nullable(),
@@ -112,6 +114,20 @@ export const MatchDetail = z.object({
   results: z.array(PlayerReveal).nullable(),
 });
 export type MatchDetail = z.infer<typeof MatchDetail>;
+
+// ─── GET /matches/:id/events (replay + delayed spectator backfill) ───────────
+
+export const MatchEventsResponse = z.object({
+  matchId: z.string().uuid(),
+  /** Terminal matches replay in full; in-flight ones are delayed for spectators. */
+  finished: z.boolean(),
+  /** Seconds the view is delayed by (0 for finished matches / players). */
+  delayedBySec: z.number().int().nonnegative(),
+  /** Validated MatchEvent rows, ascending seq. Kept loose here — the client
+   *  narrows with MatchEvent.parse per entry (the api only emits valid ones). */
+  events: z.array(z.unknown()),
+});
+export type MatchEventsResponse = z.infer<typeof MatchEventsResponse>;
 
 // ─── POST /matches/:id/rematch ────────────────────────────────────────────────
 

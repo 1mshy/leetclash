@@ -1,18 +1,26 @@
-# Minimal dev Prometheus config.
-# api/realtime run on the HOST in Phase 0 (pnpm dev); scraped via
-# host.docker.internal. These are placeholders until the services expose
-# /metrics.
+# Dev Prometheus config (Phase 3: real /metrics endpoints).
+# api/worker run on the HOST in dev (pnpm dev); scraped via
+# host.docker.internal. judge-worker runs in compose (profile judge-v2).
 global:
   scrape_interval: 15s
 
 scrape_configs:
+  # Fastify api — HTTP metrics + queue depth gauges.
   - job_name: api
     static_configs:
       - targets: ["host.docker.internal:4000"]
 
-  - job_name: realtime
+  # Judging worker — judging durations, queue depths, autoscale gauge
+  # (leetclash_judge_desired_workers).
+  - job_name: worker
     static_configs:
-      - targets: ["host.docker.internal:4001"]
+      - targets: ["host.docker.internal:4100"]
+
+  # Isolate judge workers (Phase 3, profile judge-v2) — exec counters,
+  # per-batch durations, pre-warmed pool free gauge.
+  - job_name: judge
+    static_configs:
+      - targets: ["judge-worker:4200"]
 
   - job_name: prometheus
     static_configs:

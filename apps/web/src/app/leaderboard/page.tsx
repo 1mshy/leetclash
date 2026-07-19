@@ -10,6 +10,8 @@ const MODES: { id: GameMode; label: string; sameLang: boolean }[] = [
   { id: "speed_race", label: "Speed Race", sameLang: false },
   { id: "code_golf", label: "Code Golf", sameLang: false },
   { id: "fastest_runtime", label: "Fastest Runtime", sameLang: true },
+  { id: "memory_golf", label: "Memory Golf", sameLang: true },
+  { id: "scaling_duel", label: "Scaling Duel", sameLang: false },
 ];
 const LANGUAGES: Language[] = ["python", "cpp", "javascript", "java", "go", "rust"];
 

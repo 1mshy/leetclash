@@ -7,9 +7,16 @@ import { joinPresence, leavePresence } from "./presence.js";
 // Client → server payloads. Server never trusts the client beyond this shape.
 const JoinMatchPayload = z.object({ matchId: z.string().uuid() });
 const LeaveMatchPayload = JoinMatchPayload;
+const SpectatePayload = JoinMatchPayload;
 const IdentifyPayload = z.object({ userId: z.string().uuid() });
 
 export const matchRoom = (matchId: string): string => `match:${matchId}`;
+/**
+ * Spectator room (§1.3): fed by the bridge on a SPECTATOR_DELAY_SEC fuse and
+ * kept apart from matchRoom so spectating never touches player presence and
+ * never leaks the live (undelayed) stream.
+ */
+export const spectateRoom = (matchId: string): string => `spectate:${matchId}`;
 export const userRoom = (userId: string): string => `user:${userId}`;
 
 /**
@@ -63,6 +70,24 @@ export function registerRoomHandlers(io: Server, redis: Redis): void {
       const { matchId } = parsed.data;
       await socket.leave(matchRoom(matchId));
       await leavePresence(redis, socket, matchId);
+    });
+
+    // Spectators: separate room, no presence (a spectator must never trip the
+    // disconnect/abandon machinery), no live state snapshot (the delayed
+    // backfill comes from GET /matches/:id/events).
+    socket.on(WS_EVENTS.SPECTATE_MATCH, async (raw: unknown) => {
+      const parsed = SpectatePayload.safeParse(raw);
+      if (!parsed.success) {
+        socket.emit(WS_EVENTS.ERROR, { message: "invalid spectate payload" });
+        return;
+      }
+      await socket.join(spectateRoom(parsed.data.matchId));
+    });
+
+    socket.on(WS_EVENTS.LEAVE_SPECTATE, async (raw: unknown) => {
+      const parsed = SpectatePayload.safeParse(raw);
+      if (!parsed.success) return;
+      await socket.leave(spectateRoom(parsed.data.matchId));
     });
   });
 }

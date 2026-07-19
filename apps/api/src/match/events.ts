@@ -110,6 +110,8 @@ export async function refreshMatchState(matchId: string): Promise<LiveMatchState
       bytes: submissions.bytes,
       timeMs: submissions.timeMs,
       timeSumMs: submissions.timeSumMs,
+      memoryKb: submissions.memoryKb,
+      tierReached: submissions.tierReached,
     })
     .from(submissions)
     .where(and(eq(submissions.matchId, matchId), eq(submissions.kind, "submit")))
@@ -141,6 +143,14 @@ export async function refreshMatchState(matchId: string): Promise<LiveMatchState
             .map((s) => s.timeSumMs ?? s.timeMs) // timeMs: rows predating time_sum_ms
             .filter((t): t is number => t !== null);
           bestMetric = times.length > 0 ? Math.min(...times) : null;
+        } else if (match.mode === "memory_golf") {
+          const peaks = acceptedSubs
+            .map((s) => s.memoryKb)
+            .filter((m): m is number => m !== null);
+          bestMetric = peaks.length > 0 ? Math.min(...peaks) : null;
+        } else if (match.mode === "scaling_duel") {
+          // Higher is better here — the client renders it as "tier N".
+          bestMetric = Math.max(...acceptedSubs.map((s) => s.tierReached ?? 0));
         }
       }
       return {

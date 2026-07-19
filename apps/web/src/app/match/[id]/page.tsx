@@ -96,6 +96,16 @@ export default function MatchPage({ params }: { params: Promise<{ id: string }> 
     }
   }, [rematchMatchId, id, router]);
 
+  // Non-players never get the live cockpit — send them to the delayed
+  // spectator view (§1.3 anti-ghosting; the server delays their events too).
+  useEffect(() => {
+    if (!detail || !myUserId) return;
+    const isPlayer = detail.players.some((p) => p.id === myUserId);
+    if (!isPlayer && detail.status !== "finished") {
+      router.replace(`/match/${id}/replay`);
+    }
+  }, [detail, myUserId, id, router]);
+
   const effectiveStatus = status ?? detail?.status ?? null;
   const live = effectiveStatus === "live";
   const finished = effectiveStatus === "finished";
@@ -430,6 +440,12 @@ function ResultsScreen({
           >
             Back to lobby
           </a>
+          <a
+            href={`/match/${detail.id}/replay`}
+            className="rounded-md border border-edge px-6 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-accent hover:text-accent"
+          >
+            Watch replay
+          </a>
         </div>
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       </div>
@@ -464,6 +480,12 @@ function ResultsScreen({
                 )}
                 {r.benchmarkMs === null && r.timeMs !== null && <span>{r.timeMs}ms</span>}
                 {r.bytes !== null && <span>{r.bytes}B</span>}
+                {detail.mode === "memory_golf" && r.memoryKb !== null && (
+                  <span className="text-accent">{r.memoryKb.toLocaleString()} KB peak</span>
+                )}
+                {detail.mode === "scaling_duel" && r.tierReached !== null && (
+                  <span className="text-accent">tier {r.tierReached}</span>
+                )}
                 <span>{r.submitCount} submit{r.submitCount === 1 ? "" : "s"}</span>
                 <RatingDelta reveal={r} ranked={detail.ranked} />
               </div>

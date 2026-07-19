@@ -74,16 +74,26 @@ export interface JudgeParams {
   language: Language;
   source: string;
   stdin: string;
-  expectedOutput: string;
+  /**
+   * Omit to run without an answer check (exit 0 ⇒ accepted) — the seeded
+   * generation path uses this to capture generator/reference stdout.
+   */
+  expectedOutput?: string;
   /** CPU time limit in ms (Judge0 takes seconds). */
   timeLimitMs?: number;
   memoryLimitKb?: number;
+  /** argv passed to the program (generator runs: "<seed> <size_tier>"). */
+  commandLineArguments?: string;
+  /** Max created-file size (KB) — raised for large seeded tiers. */
+  maxFileSizeKb?: number;
 }
 
 export interface JudgeOutcome {
   verdict: Verdict;
   timeMs: number | null;
   memoryKb: number | null;
+  /** Program stdout — consumed by the seeded generation path. */
+  stdout: string | null;
   /** Compile/runtime error detail, truncated. */
   detail: string | null;
 }
@@ -117,11 +127,14 @@ export async function judgeWithJudge0(params: JudgeParams): Promise<JudgeOutcome
         language_id: JUDGE0_LANGUAGE_IDS[params.language],
         source_code: b64(params.source),
         stdin: b64(params.stdin),
-        expected_output: b64(params.expectedOutput),
+        expected_output:
+          params.expectedOutput === undefined ? undefined : b64(params.expectedOutput),
         cpu_time_limit: params.timeLimitMs ? params.timeLimitMs / 1000 : undefined,
         memory_limit: params.memoryLimitKb
           ? Math.max(params.memoryLimitKb, config.JUDGE0_MEMORY_FLOOR_KB)
           : undefined,
+        command_line_arguments: params.commandLineArguments,
+        max_file_size: params.maxFileSizeKb,
       }),
     },
   );
@@ -144,6 +157,7 @@ export async function judgeWithJudge0(params: JudgeParams): Promise<JudgeOutcome
       verdict: mapStatus(sub.status.id),
       timeMs: sub.time === null ? null : Math.round(parseFloat(sub.time) * 1000),
       memoryKb: sub.memory,
+      stdout: fromB64(sub.stdout),
       detail: detailRaw === null ? null : detailRaw.slice(0, DETAIL_MAX_CHARS),
     };
   }
@@ -152,6 +166,7 @@ export async function judgeWithJudge0(params: JudgeParams): Promise<JudgeOutcome
     verdict: "internal_error",
     timeMs: null,
     memoryKb: null,
+    stdout: null,
     detail: `Judge0 poll timed out after ${(MAX_POLLS * POLL_INTERVAL_MS) / 1000}s`,
   };
 }

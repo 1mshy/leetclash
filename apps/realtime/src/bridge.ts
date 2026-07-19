@@ -1,7 +1,7 @@
 import type { Redis } from "ioredis";
 import type { Server } from "socket.io";
-import { MatchEvent, WS_EVENTS } from "@leetclash/shared";
-import { matchRoom } from "./rooms.js";
+import { MatchEvent, SPECTATOR_DELAY_SEC, WS_EVENTS } from "@leetclash/shared";
+import { matchRoom, spectateRoom } from "./rooms.js";
 
 /** Redis pub/sub channel that api/matchmaker publish MatchEvents to. */
 export const MATCH_EVENTS_CHANNEL = "match-events";
@@ -40,7 +40,17 @@ export async function startMatchEventBridge(io: Server, sub: Redis): Promise<voi
 
     const event = parsed.data;
     io.to(matchRoom(event.matchId)).emit(WS_EVENTS.MATCH_EVENT, event);
+
+    // Spectators get the same event on a SPECTATOR_DELAY_SEC fuse (§1.3:
+    // delayed view prevents ghosting). In-memory timers are fine here — a
+    // gateway restart only costs spectators a gap they can refill over REST.
+    const timer = setTimeout(() => {
+      io.to(spectateRoom(event.matchId)).emit(WS_EVENTS.MATCH_EVENT, event);
+    }, SPECTATOR_DELAY_SEC * 1000);
+    timer.unref();
   });
 
-  console.log(`[realtime] bridging ${MATCH_EVENTS_CHANNEL} → match rooms`);
+  console.log(
+    `[realtime] bridging ${MATCH_EVENTS_CHANNEL} → match rooms (+${SPECTATOR_DELAY_SEC}s spectate)`,
+  );
 }

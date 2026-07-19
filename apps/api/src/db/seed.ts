@@ -47,6 +47,29 @@ function loadTestCases(dir: string): SeedTestCase[] {
   return cases;
 }
 
+/** solutions/reference.<ext> → Record<Language, source> for seeded judging. */
+const REFERENCE_EXTENSIONS: Record<string, string> = {
+  py: "python",
+  cpp: "cpp",
+  js: "javascript",
+  java: "java",
+  go: "go",
+  rs: "rust",
+};
+
+function loadReferenceSolutions(dir: string): Record<string, string> {
+  const solutionsDir = path.join(dir, "solutions");
+  const refs: Record<string, string> = {};
+  if (!existsSync(solutionsDir)) return refs;
+  for (const file of readdirSync(solutionsDir)) {
+    const match = /^reference\.([a-z]+)$/.exec(file);
+    const language = match?.[1] ? REFERENCE_EXTENSIONS[match[1]] : undefined;
+    if (!language) continue;
+    refs[language] = readFileSync(path.join(solutionsDir, file), "utf8");
+  }
+  return refs;
+}
+
 const slugs = readdirSync(PROBLEMS_DIR)
   .filter((d) => statSync(path.join(PROBLEMS_DIR, d)).isDirectory())
   .sort();
@@ -65,6 +88,15 @@ for (const slug of slugs) {
   const statementMd = readFileSync(path.join(dir, "statement.md"), "utf8");
   const cases = loadTestCases(dir);
 
+  // Seeded per-match generation (Phase 3 §2.3) needs the generator plus a
+  // reference solution to produce expected outputs; both stored inline like
+  // test data. Problems without either fall back to the static hidden suite.
+  const generatorPath = path.join(dir, "generator.py");
+  const generatorSource = existsSync(generatorPath)
+    ? readFileSync(generatorPath, "utf8")
+    : null;
+  const referenceSolutions = loadReferenceSolutions(dir);
+
   const values = {
     title: manifest.title,
     difficulty: manifest.difficulty,
@@ -72,6 +104,8 @@ for (const slug of slugs) {
     tags: manifest.tags,
     starterCode: manifest.starterCode,
     limits: manifest.limits,
+    generatorSource,
+    referenceSolutions,
     status: "published" as const,
   };
 

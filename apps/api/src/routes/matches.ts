@@ -1,11 +1,12 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import type { MatchDetail, MatchProblem, PlayerReveal } from "@leetclash/shared";
-import { RematchRequest } from "@leetclash/shared";
+import type { MatchDetail, MatchEventsResponse, MatchProblem, PlayerReveal } from "@leetclash/shared";
+import { RematchRequest, SPECTATOR_DELAY_SEC } from "@leetclash/shared";
 import { db } from "../db/client.js";
 import {
   matches,
+  matchEvents,
   matchPlayers,
   problems,
   submissions,
@@ -117,6 +118,75 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       results,
     };
     return detail;
+  });
+
+  /**
+   * Replay / spectator backfill from the append-only event log (§3.2 —
+   * "enables replays and spectating for free"). Finished matches replay in
+   * full. In-flight matches are served DELAYED by SPECTATOR_DELAY_SEC to
+   * non-players (anti-ghosting, §1.3); players get the live view (they
+   * already receive every event over the socket anyway).
+   */
+  app.get("/matches/:id/events", async (request, reply) => {
+    const params = IdParams.safeParse(request.params);
+    if (!params.success) return reply.status(400).send({ error: "invalid match id" });
+    const query = z
+      .object({ userId: z.string().uuid().optional() })
+      .safeParse(request.query);
+    if (!query.success) return reply.status(400).send({ error: "invalid userId" });
+    const matchId = params.data.id;
+
+    const [match] = await db
+      .select({ status: matches.status })
+      .from(matches)
+      .where(eq(matches.id, matchId))
+      .limit(1);
+    if (!match) return reply.status(404).send({ error: "match not found" });
+
+    const finished = match.status === "finished" || match.status === "abandoned";
+
+    let isPlayer = false;
+    if (query.data.userId) {
+      const [row] = await db
+        .select({ userId: matchPlayers.userId })
+        .from(matchPlayers)
+        .where(
+          and(eq(matchPlayers.matchId, matchId), eq(matchPlayers.userId, query.data.userId)),
+        )
+        .limit(1);
+      isPlayer = !!row;
+    }
+
+    const delayed = !finished && !isPlayer;
+    const filters = [eq(matchEvents.matchId, matchId)];
+    if (delayed) {
+      filters.push(lte(matchEvents.at, new Date(Date.now() - SPECTATOR_DELAY_SEC * 1000)));
+    }
+
+    const rows = await db
+      .select({
+        seq: matchEvents.seq,
+        type: matchEvents.type,
+        payload: matchEvents.payload,
+        at: matchEvents.at,
+      })
+      .from(matchEvents)
+      .where(and(...filters))
+      .orderBy(asc(matchEvents.seq));
+
+    const res: MatchEventsResponse = {
+      matchId,
+      finished,
+      delayedBySec: delayed ? SPECTATOR_DELAY_SEC : 0,
+      events: rows.map((r) => ({
+        matchId,
+        seq: r.seq,
+        type: r.type,
+        payload: r.payload,
+        at: r.at.toISOString(),
+      })),
+    };
+    return res;
   });
 
   /**
@@ -235,6 +305,7 @@ async function buildResults(
       memoryKb: submissions.memoryKb,
       bytes: submissions.bytes,
       benchmarkMs: submissions.benchmarkMs,
+      tierReached: submissions.tierReached,
       createdAt: submissions.createdAt,
     })
     .from(submissions)
@@ -265,6 +336,14 @@ async function buildResults(
           accepted.reduce((a, b) =>
             (b.timeMs ?? Infinity) < (a.timeMs ?? Infinity) ? b : a,
           );
+      } else if (mode === "memory_golf") {
+        shown = accepted.reduce((a, b) =>
+          (b.memoryKb ?? Infinity) < (a.memoryKb ?? Infinity) ? b : a,
+        );
+      } else if (mode === "scaling_duel") {
+        shown = accepted.reduce((a, b) =>
+          (b.tierReached ?? 0) > (a.tierReached ?? 0) ? b : a,
+        );
       }
     }
     return {
@@ -279,6 +358,7 @@ async function buildResults(
       submitCount: mine.length,
       acceptedAt: acceptedFirst?.createdAt.toISOString() ?? null,
       benchmarkMs: shown?.benchmarkMs ?? null,
+      tierReached: shown?.tierReached ?? null,
       ratingBefore: p.ratingBefore,
       ratingAfter: p.ratingAfter,
     };

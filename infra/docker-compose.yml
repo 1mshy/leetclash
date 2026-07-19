@@ -19,6 +19,7 @@ volumes:
   postgres-data:
   minio-data:
   judge0-db-data:
+  judge-cache:
 
 services:
   # ── Core app dependencies ────────────────────────────────────────────────
@@ -146,6 +147,39 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # ── Phase 3: custom isolate judge (profile "judge-v2", PLAN §4.1) ────────
+  # Replaces the judge0 quartet: set JUDGE_BACKEND=isolate on the api/worker
+  # and start with  docker compose --profile judge-v2 up -d --build
+  # Scale on queue depth via infra/scripts/judge-autoscale.sh (§9 Phase 3).
+  judge-worker:
+    build:
+      context: ..
+      dockerfile: apps/judge/Dockerfile
+    profiles: ["judge-v2"]
+    # isolate needs namespace + cgroup control; private cgroupns gives the
+    # container its own delegatable cgroup v2 subtree (see entrypoint.sh).
+    privileged: true
+    cgroup: private
+    environment:
+      REDIS_URL: redis://redis:6379
+      JUDGE_LANGUAGES: python,cpp
+      JUDGE_POOL_SIZE: 4
+      # "on" = exit loudly when cgroup delegation breaks (Memory Golf needs
+      # cgroup memory.peak, §4.4); switch to auto to tolerate an rss fallback.
+      # Quoted — bare `on` is a YAML 1.1 boolean and would reach zod as "true".
+      JUDGE_CGROUPS: "on"
+    volumes:
+      - judge-cache:/var/cache/leetclash-judge
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:4200/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
 
   # ── Optional: reverse proxy (profile "proxy") ────────────────────────────
   traefik:

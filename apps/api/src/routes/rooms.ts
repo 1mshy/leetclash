@@ -1,7 +1,12 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { CreateRoomRequest, INVITE_CODE_LENGTH, JoinRoomRequest } from "@leetclash/shared";
+import {
+  CreateRoomRequest,
+  INVITE_CODE_LENGTH,
+  JoinRoomRequest,
+  MODE_SPECS,
+} from "@leetclash/shared";
 import { db } from "../db/client.js";
 import { matches, matchPlayers } from "../db/schema.js";
 import { enqueueMatchStart } from "../match/engine.js";
@@ -31,13 +36,16 @@ export const roomRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const inviteCode = generateInviteCode();
+    const mode = body.data.mode;
     // MatchConfig shape from @leetclash/shared, plus the room's inviteCode.
+    // Rooms are always cross-language casual (language: null) — perf modes in
+    // a room are the plan's "clearly labeled unfair" arena (§1.2).
     const roomConfig = {
       inviteCode,
-      mode: "speed_race",
+      mode,
       language: null,
       difficulty: null,
-      timeLimitSec: body.data.timeLimitSec,
+      timeLimitSec: body.data.timeLimitSec ?? MODE_SPECS[mode].defaultTimeLimitSec,
       bestOf: null,
       ranked: false,
     };
@@ -45,7 +53,7 @@ export const roomRoutes: FastifyPluginAsync = async (app) => {
     const [match] = await db
       .insert(matches)
       .values({
-        mode: "speed_race",
+        mode,
         status: "matched",
         config: roomConfig,
         // problemId stays null: the problem is assigned and revealed by the

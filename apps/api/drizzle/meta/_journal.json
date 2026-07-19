@@ -29,6 +29,13 @@
       "when": 1784395265249,
       "tag": "0003_submission_time_sum_ms",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784398919837,
+      "tag": "0004_phase3_seeded_judging",
+      "breakpoints": true
     }
   ]
 }

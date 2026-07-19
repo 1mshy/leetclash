@@ -163,6 +163,12 @@ export const WS_EVENTS = {
   // client → server
   JOIN_MATCH: "match:join",
   LEAVE_MATCH: "match:leave",
+  /**
+   * Spectate a match (§1.3): joins a spectate room whose event fan-out is
+   * delayed by SPECTATOR_DELAY_SEC and which never touches player presence.
+   */
+  SPECTATE_MATCH: "match:spectate",
+  LEAVE_SPECTATE: "match:spectate:leave",
   /** Subscribe to a per-user room for queue/notification pushes (payload: {userId}). */
   IDENTIFY: "user:identify",
   // server → client

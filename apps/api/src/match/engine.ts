@@ -9,6 +9,7 @@
  * transition is guarded by a conditional UPDATE on matches.status: the first
  * writer wins, everyone else no-ops (e.g. a win racing the timeout job).
  */
+import { randomInt } from "node:crypto";
 import { Queue } from "bullmq";
 import type { Job } from "bullmq";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
@@ -109,9 +110,19 @@ async function revealProblem(matchId: string): Promise<void> {
   const problem = await pickRandomProblem(cfg.excludeProblemId);
   if (!problem) throw new Error("no published problems to assign — seed the problem bank");
 
+  // Per-match test seed (§2.3, §6.1): every Submit in this match judges
+  // against data generated from THIS seed, identical for both players and
+  // different across matches. Lives in config, never in a broadcast event.
+  const testSeed = randomInt(0, 2_147_483_647);
+
   const [claimed] = await db
     .update(matches)
-    .set({ problemId: problem.id, status: "live", startedAt: new Date() })
+    .set({
+      problemId: problem.id,
+      status: "live",
+      startedAt: new Date(),
+      config: { ...(match.config as Record<string, unknown>), testSeed },
+    })
     .where(and(eq(matches.id, matchId), eq(matches.status, "countdown")))
     .returning({ id: matches.id });
   if (!claimed) return;

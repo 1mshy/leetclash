@@ -8,6 +8,8 @@ export const COUNTDOWN_SECONDS = 5;
 export const SUBMIT_THROTTLE_SEC = 10;
 /** Grace period to reconnect before a disconnect becomes an abandon (§3.2). */
 export const DISCONNECT_GRACE_SEC = 60;
+/** Spectators see the match delayed by this much to prevent ghosting (§1.3). */
+export const SPECTATOR_DELAY_SEC = 30;
 
 // ─── Modes & languages ────────────────────────────────────────────────────────
 

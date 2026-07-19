@@ -60,6 +60,33 @@ export function leaveMatch(matchId: string): void {
 }
 
 /**
+ * Spectate a live match (§1.3): events arrive SPECTATOR_DELAY_SEC late and
+ * presence is never touched — a spectator can't trip the abandon machinery.
+ * Backfill history via getMatchEvents(); this stream picks up from "now".
+ */
+export function spectateMatch(
+  matchId: string,
+  onEvent: (event: MatchEvent) => void,
+): () => void {
+  const s = getSocket();
+
+  const join = () => s.emit(WS_EVENTS.SPECTATE_MATCH, { matchId });
+  join();
+  s.on("connect", join);
+
+  const handler = (event: MatchEvent) => {
+    if (event.matchId === matchId) onEvent(event);
+  };
+  s.on(WS_EVENTS.MATCH_EVENT, handler);
+
+  return () => {
+    s.off("connect", join);
+    s.off(WS_EVENTS.MATCH_EVENT, handler);
+    s.emit(WS_EVENTS.LEAVE_SPECTATE, { matchId });
+  };
+}
+
+/**
  * Join the per-user room and subscribe to user-scoped pushes (queue_matched).
  * A queued player has no match room yet, so this is how the matchmaker reaches
  * them. Re-identifies on reconnect (rooms don't survive a reconnect).

@@ -21,6 +21,16 @@ const EnvSchema = z.object({
    * limits exactly (production).
    */
   JUDGE0_MEMORY_FLOOR_KB: z.coerce.number().int().nonnegative().default(0),
+  /**
+   * Which judge executes suites (PLAN §4.1): "judge0" = the MVP quartet
+   * (default, works on macOS dev); "isolate" = the Phase 3 custom workers
+   * (apps/judge) consuming the per-language judge-exec-* queues.
+   */
+  JUDGE_BACKEND: z.enum(["judge0", "isolate"]).default("judge0"),
+  /** Hard ceiling on one exec batch round-trip to the isolate workers (ms). */
+  JUDGE_EXEC_TIMEOUT_MS: z.coerce.number().int().positive().default(300_000),
+  /** Worker metrics HTTP port (Prometheus scrape; 0 = disabled). */
+  WORKER_METRICS_PORT: z.coerce.number().int().nonnegative().default(4100),
   API_PORT: z.coerce.number().int().positive().default(4000),
   AUTH_SECRET: z.string().min(1).default("dev-only-secret-change-me"),
   WEB_URL: z.string().min(1).default("http://localhost:3000"),

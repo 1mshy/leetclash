@@ -40,8 +40,8 @@ export interface ModeSpec {
   lowerIsBetter: boolean;
   /** Default wall-clock window / hard cap, seconds. */
   defaultTimeLimitSec: number;
-  /** Shipped and queueable in Phase 2 (§9). The rest are Phase 3/4 stubs. */
-  phase2: boolean;
+  /** Shipped and queueable. Blitz is the remaining Phase 4 stub (§9). */
+  shipped: boolean;
 }
 
 export const MODE_SPECS: Record<GameMode, ModeSpec> = {
@@ -53,7 +53,7 @@ export const MODE_SPECS: Record<GameMode, ModeSpec> = {
     winMetric: "time_to_accept",
     lowerIsBetter: true,
     defaultTimeLimitSec: 1800,
-    phase2: true,
+    shipped: true,
   },
   code_golf: {
     mode: "code_golf",
@@ -65,7 +65,7 @@ export const MODE_SPECS: Record<GameMode, ModeSpec> = {
     winMetric: "source_bytes",
     lowerIsBetter: true,
     defaultTimeLimitSec: 900,
-    phase2: true,
+    shipped: true,
   },
   fastest_runtime: {
     mode: "fastest_runtime",
@@ -75,7 +75,7 @@ export const MODE_SPECS: Record<GameMode, ModeSpec> = {
     winMetric: "runtime_ms",
     lowerIsBetter: true,
     defaultTimeLimitSec: 900,
-    phase2: true,
+    shipped: true,
   },
   memory_golf: {
     mode: "memory_golf",
@@ -85,7 +85,7 @@ export const MODE_SPECS: Record<GameMode, ModeSpec> = {
     winMetric: "peak_memory_kb",
     lowerIsBetter: true,
     defaultTimeLimitSec: 900,
-    phase2: false, // needs cgroup memory.peak — Phase 3 (§4.4)
+    shipped: true, // Phase 3: cgroup memory.peak via the isolate judge (§4.4)
   },
   scaling_duel: {
     mode: "scaling_duel",
@@ -95,7 +95,7 @@ export const MODE_SPECS: Record<GameMode, ModeSpec> = {
     winMetric: "tier_reached",
     lowerIsBetter: false,
     defaultTimeLimitSec: 1200,
-    phase2: false, // needs tiered seeded generation — Phase 3 (§4.1)
+    shipped: true, // Phase 3: tiered seeded generation (§4.1)
   },
   blitz: {
     mode: "blitz",
@@ -105,13 +105,13 @@ export const MODE_SPECS: Record<GameMode, ModeSpec> = {
     winMetric: "round_wins",
     lowerIsBetter: false,
     defaultTimeLimitSec: 300,
-    phase2: false, // best-of-N series — Phase 4 (§9)
+    shipped: false, // best-of-N series — Phase 4 (§9)
   },
 };
 
-/** Modes a player can queue for / a room can select in Phase 2. */
-export const PHASE2_MODES = (Object.values(MODE_SPECS) as ModeSpec[])
-  .filter((s) => s.phase2)
+/** Modes a player can queue for / a room can select. */
+export const SHIPPED_MODES = (Object.values(MODE_SPECS) as ModeSpec[])
+  .filter((s) => s.shipped)
   .map((s) => s.mode);
 
 export function isSameLanguageMode(mode: GameMode): boolean {
@@ -147,4 +147,25 @@ export function queueKey(mode: GameMode, language: Language | null): string {
 /** Leaderboard ZSET key — mirrors the rating ladder key. */
 export function leaderboardKey(mode: GameMode, language: Language | null): string {
   return `lb:${mode}:${ratingLanguageKey(mode, language) ?? "all"}`;
+}
+
+/**
+ * Per-language interpreter/runtime memory floor (KB), measured against an
+ * empty program (§1.2): Memory Golf subtracts it for display and for ranking
+ * in cross-language (casual) rooms so Python's ~10 MB floor doesn't dominate.
+ * Ranked Memory Golf is same-language, where the baseline cancels out anyway.
+ * Dev-calibrated defaults — re-measure on the production judge image.
+ */
+export const LANGUAGE_MEMORY_BASELINE_KB: Record<Language, number> = {
+  python: 9_800,
+  cpp: 1_600,
+  javascript: 42_000,
+  java: 36_000,
+  go: 2_100,
+  rust: 1_700,
+};
+
+/** Peak memory adjusted by the language baseline (never below zero). */
+export function adjustedMemoryKb(memoryKb: number, language: Language): number {
+  return Math.max(0, memoryKb - LANGUAGE_MEMORY_BASELINE_KB[language]);
 }

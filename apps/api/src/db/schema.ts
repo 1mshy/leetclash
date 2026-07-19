@@ -139,10 +139,24 @@ export const problems = pgTable(
         >;
       }>()
       .notNull(),
-    /** MinIO URI of the seeded input generator (Phase 3). */
+    /** MinIO URI of the seeded input generator (large banks, later). */
     generatorUri: text("generator_uri"),
-    /** MinIO URI of the output checker/validator (Phase 3). */
+    /** MinIO URI of the output checker/validator (later). */
     checkerUri: text("checker_uri"),
+    /**
+     * Seeded input generator source (Python, argv = seed size_tier) — inline
+     * like test data (Phase 3 §2.3). Null = no per-match generation; the
+     * static hidden suite judges every submit.
+     */
+    generatorSource: text("generator_source"),
+    /**
+     * Reference solutions per language (Record<Language, string>). Seeded
+     * judging runs one of these to produce expected outputs (§2.2).
+     */
+    referenceSolutions: jsonb("reference_solutions")
+      .$type<Partial<Record<string, string>>>()
+      .notNull()
+      .default({}),
     status: problemStatusEnum("status").notNull().default("draft"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

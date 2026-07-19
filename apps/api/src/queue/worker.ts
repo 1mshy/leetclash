@@ -8,11 +8,14 @@
  *  - 'match-lifecycle': the state machine's durable timers (countdown → reveal
  *    → timeout), see src/match/engine.ts.
  */
+import { createServer } from "node:http";
 import { Worker } from "bullmq";
 import type { Job } from "bullmq";
 import { and, count, eq } from "drizzle-orm";
+import { config } from "../config.js";
 import { closeDb, db } from "../db/client.js";
 import { matches, submissions } from "../db/schema.js";
+import { closeMetrics, judgeAutoscaleTick, judgingDuration, registry } from "../metrics.js";
 import {
   MATCH_LIFECYCLE_QUEUE_NAME,
   finishMatch,
@@ -31,11 +34,29 @@ import {
 /** Run/Submit a submission's source against the problem's test suite. */
 async function judgeAllTests(job: Job<SubmissionJobData>): Promise<SuiteResult> {
   const { request } = job.data;
+
+  // Match-scoped judging context: the mode picks the plan shape (Scaling Duel
+  // escalates tiers) and the per-match seed drives fresh test generation
+  // (§2.3). Solo practice (null matchId) judges on the static suite only.
+  let match: import("../match/judging.js").MatchJudgingContext | null = null;
+  if (request.matchId) {
+    const [row] = await db
+      .select({ mode: matches.mode, config: matches.config })
+      .from(matches)
+      .where(eq(matches.id, request.matchId))
+      .limit(1);
+    if (row) {
+      const seed = (row.config as { testSeed?: number }).testSeed;
+      match = { mode: row.mode, testSeed: typeof seed === "number" ? seed : null };
+    }
+  }
+
   return runSuite({
     problemId: request.problemId,
     language: request.language,
     source: request.source,
     kind: request.kind,
+    match,
   });
 }
 
@@ -86,7 +107,7 @@ async function publishMatchOutcome(
       bytes: Buffer.byteLength(request.source, "utf8"),
       testsPassed: summary.testsPassed,
       testsTotal: summary.testsTotal,
-      tierReached: null,
+      tierReached: summary.tierReached,
       detail: null,
     },
   });
@@ -107,6 +128,7 @@ async function publishMatchOutcome(
 
 async function processSubmission(job: Job<SubmissionJobData>): Promise<void> {
   const { submissionId } = job.data;
+  const stopTimer = judgingDuration.startTimer({ kind: job.data.request.kind });
 
   await db
     .update(submissions)
@@ -114,6 +136,7 @@ async function processSubmission(job: Job<SubmissionJobData>): Promise<void> {
     .where(eq(submissions.id, submissionId));
 
   const summary = await judgeAllTests(job);
+  stopTimer({ verdict: summary.verdict });
 
   await db
     .update(submissions)
@@ -125,6 +148,7 @@ async function processSubmission(job: Job<SubmissionJobData>): Promise<void> {
       memoryKb: summary.memoryKb,
       testsPassed: summary.testsPassed,
       testsTotal: summary.testsTotal,
+      tierReached: summary.tierReached,
       detail: summary.detail,
     })
     .where(eq(submissions.id, submissionId));
@@ -172,6 +196,9 @@ submissionWorker.on("failed", (job, err) => {
           detail: null,
           testsPassed: 0,
           testsTotal: 0,
+          tierReached: null,
+          sampleSumMs: null,
+          samplePeakKb: null,
         }),
       )
       .catch((e) => console.error("[worker] failed to settle submission:", e));
@@ -185,6 +212,36 @@ lifecycleWorker.on("failed", (job, err) => {
 // Disconnect/abandon: consume presence signals from the realtime gateway.
 await startPresenceSubscriber();
 
+// Judge autoscaling on queue depth (§9 Phase 3): publish the desired replica
+// count for infra/scripts/judge-autoscale.sh + the Grafana gauge.
+const AUTOSCALE_TICK_MS = 15_000;
+const autoscaleTimer = setInterval(() => {
+  void judgeAutoscaleTick().catch((err) =>
+    console.error("[worker] autoscale tick failed:", err instanceof Error ? err.message : err),
+  );
+}, AUTOSCALE_TICK_MS);
+
+// Prometheus scrape endpoint for worker-side metrics (queue depths, judging
+// durations, autoscale gauge) — the api serves its own on /metrics.
+const metricsServer =
+  config.WORKER_METRICS_PORT > 0
+    ? createServer((req, res) => {
+        if (req.url === "/healthz") {
+          res.writeHead(200, { "content-type": "text/plain" }).end("ok");
+          return;
+        }
+        if (req.url === "/metrics") {
+          void registry.metrics().then((body) => {
+            res.writeHead(200, { "content-type": registry.contentType }).end(body);
+          });
+          return;
+        }
+        res.writeHead(404).end();
+      }).listen(config.WORKER_METRICS_PORT, () =>
+        console.log(`[worker] metrics on :${config.WORKER_METRICS_PORT}/metrics`),
+      )
+    : null;
+
 console.log(
   `[worker] listening on queues '${SUBMISSIONS_QUEUE_NAME}', '${MATCH_LIFECYCLE_QUEUE_NAME}'`,
 );
@@ -192,9 +249,12 @@ console.log(
 async function shutdown(): Promise<void> {
   console.log("[worker] shutting down…");
   clearInterval(matchmakerTimer);
+  clearInterval(autoscaleTimer);
+  metricsServer?.close();
   await Promise.all([submissionWorker.close(), lifecycleWorker.close()]);
   await closeMatchmaker();
   await closePresence();
+  await closeMetrics();
   await closeDb();
   process.exit(0);
 }

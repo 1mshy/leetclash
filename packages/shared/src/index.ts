@@ -1,5 +1,7 @@
 export * from "./core.js";
 export * from "./glicko.js";
+export * from "./judge-protocol.js";
+export * from "./suite-driver.js";
 export * from "./match-events.js";
 export * from "./matches.js";
 export * from "./modes.js";

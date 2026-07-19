@@ -12,6 +12,7 @@ import type {
   Language,
   LeaderboardResponse,
   MatchDetail,
+  MatchEventsResponse,
   MatchHistoryResponse,
   ProfileDetail,
   QueueJoinResponse,
@@ -84,12 +85,14 @@ async function ensureGuest(): Promise<ApiResult<GuestUser>> {
 // Request/response shapes live in @leetclash/shared next to the zod schemas
 // the api validates with.
 
-export async function createRoom(): Promise<ApiResult<CreateRoomResponse>> {
+export async function createRoom(
+  mode: QueueMode = "speed_race",
+): Promise<ApiResult<CreateRoomResponse>> {
   const guest = await ensureGuest();
   if (!guest.ok) return guest;
   return apiFetch<CreateRoomResponse>("/rooms", {
     method: "POST",
-    body: JSON.stringify({ hostId: guest.data.id }),
+    body: JSON.stringify({ hostId: guest.data.id, mode }),
   });
 }
 
@@ -108,6 +111,20 @@ export async function joinRoom(
 
 export async function getMatch(matchId: string): Promise<ApiResult<MatchDetail>> {
   return apiFetch<MatchDetail>(`/matches/${encodeURIComponent(matchId)}`);
+}
+
+/**
+ * Replay / spectator event backfill (§1.3). Players (stored guest id) get the
+ * live log; everyone else gets the SPECTATOR_DELAY_SEC-delayed view.
+ */
+export async function getMatchEvents(
+  matchId: string,
+): Promise<ApiResult<MatchEventsResponse>> {
+  const guest = getStoredGuest();
+  const q = guest ? `?userId=${encodeURIComponent(guest.id)}` : "";
+  return apiFetch<MatchEventsResponse>(
+    `/matches/${encodeURIComponent(matchId)}/events${q}`,
+  );
 }
 
 export async function requestRematch(

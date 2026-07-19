@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { Language, QueueMode } from "@leetclash/shared";
+import { isSameLanguageMode } from "@leetclash/shared";
 import {
   createRoom,
   getQueueStatus,
@@ -17,6 +18,8 @@ const MODES: { id: QueueMode; label: string; blurb: string }[] = [
   { id: "speed_race", label: "Speed Race", blurb: "First to solve wins" },
   { id: "code_golf", label: "Code Golf", blurb: "Smallest accepted source" },
   { id: "fastest_runtime", label: "Fastest Runtime", blurb: "Lowest benchmarked runtime" },
+  { id: "memory_golf", label: "Memory Golf", blurb: "Lowest peak memory" },
+  { id: "scaling_duel", label: "Scaling Duel", blurb: "Survive escalating input tiers" },
 ];
 
 const LANGUAGES: { id: Language; label: string }[] = [
@@ -40,7 +43,10 @@ export default function LobbyPage() {
   const [searching, setSearching] = useState(false);
   const [waited, setWaited] = useState(0);
 
-  const sameLang = mode === "fastest_runtime";
+  // ── Private room mode (casual perf modes are cross-language, §1.2) ──
+  const [roomMode, setRoomMode] = useState<QueueMode>("speed_race");
+
+  const sameLang = isSameLanguageMode(mode);
 
   useEffect(() => {
     if (!searching) return;
@@ -90,7 +96,7 @@ export default function LobbyPage() {
   async function handleCreate() {
     setBusy(true);
     setError(null);
-    const res = await createRoom();
+    const res = await createRoom(roomMode);
     setBusy(false);
     if (res.ok) router.push(`/match/${res.data.matchId}?invite=${res.data.inviteCode}`);
     else setError(res.error);
@@ -197,13 +203,32 @@ export default function LobbyPage() {
 
       {/* Private rooms */}
       <div className="w-full space-y-4">
-        <button
-          onClick={handleCreate}
-          disabled={busy}
-          className="w-full rounded-md border border-edge px-4 py-3 font-medium text-zinc-200 transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
-        >
-          {busy ? "Working…" : "Create private room"}
-        </button>
+        <div className="flex gap-2">
+          <select
+            value={roomMode}
+            onChange={(e) => setRoomMode(e.target.value as QueueMode)}
+            className="rounded-md border border-edge bg-panel px-2 py-3 font-mono text-xs text-zinc-300 focus:border-accent focus:outline-none"
+          >
+            {MODES.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleCreate}
+            disabled={busy}
+            className="flex-1 rounded-md border border-edge px-4 py-3 font-medium text-zinc-200 transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+          >
+            {busy ? "Working…" : "Create private room"}
+          </button>
+        </div>
+        {isSameLanguageMode(roomMode) && (
+          <p className="text-[11px] leading-tight text-zinc-600">
+            Heads-up: private {MODES.find((m) => m.id === roomMode)?.label} rooms are
+            cross-language — unfair by design, ranked queues match same-language.
+          </p>
+        )}
 
         <form onSubmit={handleJoin} className="flex w-full gap-2">
           <input

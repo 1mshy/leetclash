@@ -5,8 +5,14 @@ import { Difficulty, Language } from "./core.js";
 // The queue lives in Redis sorted sets; these shapes are the REST surface the
 // web client uses to join, poll, and leave.
 
-/** Modes queueable in Phase 2 (§9). Keep in sync with PHASE2_MODES in modes.ts. */
-export const QueueMode = z.enum(["speed_race", "code_golf", "fastest_runtime"]);
+/** Queueable modes. Keep in sync with SHIPPED_MODES in modes.ts (blitz = Phase 4). */
+export const QueueMode = z.enum([
+  "speed_race",
+  "code_golf",
+  "fastest_runtime",
+  "memory_golf",
+  "scaling_duel",
+]);
 export type QueueMode = z.infer<typeof QueueMode>;
 
 export const QueueJoinRequest = z.object({
